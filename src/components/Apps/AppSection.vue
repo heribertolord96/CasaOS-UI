@@ -60,8 +60,7 @@
 		</draggable>
 		<!-- App List End -->
 
-		<template v-if="oldAppList.length > 0">
-			<!-- Title Bar Start -->
+		<template v-if="oldAppList.length > 0 && !isSectionHidden('legacy-apps')">
 			<div class="title-bar is-flex is-align-items-center mt-2rem mb-5">
 				<app-section-title-tip
 					id="appTitle2"
@@ -70,12 +69,15 @@
 					title="Legacy app (To be rebuilt)."
 				>
 				</app-section-title-tip>
+				<b-icon
+					class="section-hide-btn is-clickable ml-2"
+					icon="eye-off-outline"
+					pack="casa"
+					size="is-small"
+					@click.native="toggleSectionVisibility('legacy-apps')"
+				/>
 			</div>
-			<!-- Title Bar End -->
-
-			<!-- App List Start -->
 			<div class="app-list contextmenu-canvas">
-				<!-- Application not imported Start -->
 				<div v-for="item in oldAppList" :id="'app-' + item.name" :key="'app-' + item.name" class="handle">
 					<app-card
 						:isCasa="false"
@@ -85,9 +87,7 @@
 						@updateState="getList"
 					></app-card>
 				</div>
-				<!-- Application not imported End -->
 			</div>
-			<!-- App List End -->
 		</template>
 	</div>
 </template>
@@ -105,6 +105,7 @@ import events from '@/events/events'
 import last from 'lodash/last'
 import business_ShowNewAppTag from '@/mixins/app/Business_ShowNewAppTag'
 import business_LinkApp from '@/mixins/app/Business_LinkApp'
+import usePreferences from '@/mixins/usePreferences'
 import isEqual from 'lodash/isEqual'
 import { ice_i18n } from '@/mixins/base/common-i18n'
 import YAML from 'yamljs'
@@ -138,7 +139,7 @@ const builtInApplications = [
 const orderConfig = 'app_order'
 
 export default {
-	mixins: [business_ShowNewAppTag, business_LinkApp],
+	mixins: [business_ShowNewAppTag, business_LinkApp, usePreferences],
 	data () {
 		return {
 			user_id: localStorage.getItem('user_id'),
@@ -195,12 +196,17 @@ export default {
 			this.getList()
 		})
 
+		this.$EventBus.$on('casaUI:openAppStore', () => {
+			this.showInstall(0)
+		})
+
 		this.ListRefreshTimer = setInterval(() => {
 			this.getList()
 		}, 5000)
 	},
 	beforeDestroy () {
 		this.$EventBus.$off(events.OPEN_APP_STORE_AND_GOTO_SYNCTHING)
+		this.$EventBus.$off('casaUI:openAppStore')
 		window.removeEventListener('resize', this.getSkCount)
 
 		clearInterval(this.ListRefreshTimer)

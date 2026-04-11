@@ -6,8 +6,11 @@ import TopBar from '@/components/TopBar.vue'
 import CoreService from '@/components/CoreService.vue'
 import AppSection from '@/components/Apps/AppSection.vue'
 import FilePanel from '@/components/filebrowser/FilePanel.vue'
+import EmbeddedViewer from '@/components/shell/EmbeddedViewer.vue'
+import SettingsPanel from '@/components/shell/SettingsPanel.vue'
 import UpdateCompleteModal from '@/components/settings/UpdateCompleteModal.vue'
 import { mixin } from '@/mixins/mixin'
+import usePreferences from '@/mixins/usePreferences'
 import events from '@/events/events'
 
 const wallpaperConfig = 'wallpaper'
@@ -21,8 +24,10 @@ export default {
     TopBar,
     CoreService,
     FilePanel,
+    EmbeddedViewer,
+    SettingsPanel,
   },
-  mixins: [mixin],
+  mixins: [mixin, usePreferences],
   provide() {
     return {
       homeShowFiles: this.showFiles,
@@ -34,6 +39,7 @@ export default {
       hardwareInfoLoading: true,
       user_id: localStorage.getItem('user_id') ? localStorage.getItem('user_id') : 1,
       isFileActive: false,
+      isSettingsPanelOpen: false,
       barData: {},
       topBarAni: {
         classes: 'fadeInDown',
@@ -48,6 +54,25 @@ export default {
     },
     searchbarShow() {
       return this.$store.state.searchEngineSwitch
+    },
+    activeAppId() {
+      return this.$store.getters['windowManager/activeAppId']
+    },
+    showDashboard() {
+      return this.$store.getters['windowManager/showDashboard']
+    },
+    desktopApps() {
+      return this.$store.getters['windowManager/desktopApps']
+    },
+    dashboardLayoutClasses() {
+      const prefs = this.$store.state.preferences
+      return {
+        'icon-size-small': prefs.iconSize === 'small',
+        'icon-size-large': prefs.iconSize === 'large',
+        'grid-compact': prefs.gridDensity === 'compact',
+        'grid-spacious': prefs.gridDensity === 'spacious',
+        'hide-app-labels': !prefs.showAppLabels,
+      }
     },
   },
   created() {
@@ -75,10 +100,14 @@ export default {
     this.$EventBus.$on('casaUI:openStorageManager', () => {
       this.showStorageManagerPanelModal()
     })
+    this.$EventBus.$on('casaUI:openSettingsPanel', () => {
+      this.isSettingsPanelOpen = true
+    })
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.onResize)
     this.$EventBus.$off('casaUI:openStorageManager')
+    this.$EventBus.$off('casaUI:openSettingsPanel')
   },
   methods: {
 
@@ -250,51 +279,50 @@ export default {
     <!-- NavBar End -->
 
     <!-- Content Start -->
-    <div class="contents  pt-55 contextmenu-canvas" @contextmenu.prevent="openHomeContaxtMenu">
-      <div class="container">
+    <div class="contents pt-55 contextmenu-canvas" @contextmenu.prevent="openHomeContaxtMenu">
+      <!-- Dashboard Content -->
+      <div v-show="showDashboard" class="container" :class="dashboardLayoutClasses">
         <div class="columns is-variable is-2">
           <div class="column is-one-quarter slider-content">
-            <!-- SideBar Start -->
             <SideBar v-if="!hardwareInfoLoading" />
-            <!-- SideBar End -->
           </div>
           <div :class="{ open: sidebarOpen }" class="column is-three-quarters main-content">
-            <!-- MainContent Start -->
-            <div class=" contextmenu-canvas">
-              <!-- SearchBar Start -->
+            <div class="contextmenu-canvas">
               <section>
                 <transition name="fade">
                   <SearchBar v-if="searchbarShow" />
                 </transition>
               </section>
-              <!-- SearchBar End -->
-
-              <!-- core-service Start -->
-              <section>
+              <section v-if="!isSectionHidden('core-service')" class="section-hideable">
                 <transition name="fade">
                   <CoreService />
                 </transition>
+                <button class="section-hide-btn" @click="toggleSectionVisibility('core-service')">
+                  <b-icon icon="eye-off-outline" pack="casa" size="is-small" />
+                </button>
               </section>
-              <!-- core-service End -->
-
-              <!-- Apps Start -->
               <section>
                 <AppSection ref="apps" />
               </section>
-              <!-- Apps End -->
-
-              <!-- Shortcuts Start -->
-              <!-- <section>
-								<shortcuts></shortcuts>
-							</section> -->
-              <!-- Shortcuts End -->
             </div>
-            <!-- MainContent End -->
           </div>
         </div>
       </div>
+
+      <!-- Embedded app windows (multi-window desktop) -->
+      <div v-show="!showDashboard" class="embedded-desktop">
+        <EmbeddedViewer
+          v-for="app in desktopApps"
+          :key="app.id"
+          :app="app"
+          :is-active="activeAppId === app.id"
+        />
+      </div>
     </div>
     <!-- Content End -->
+
+    <!-- Settings Panel -->
+    <SettingsPanel :visible="isSettingsPanelOpen" @close="isSettingsPanelOpen = false" />
 
     <!-- File Panel Start -->
     <b-modal
@@ -315,11 +343,50 @@ export default {
     height: 100%;
 }
 
+.section-hideable {
+    position: relative;
+
+    .section-hide-btn {
+        position: absolute;
+        top: 0.25rem;
+        right: 0.25rem;
+        background: rgba(255, 255, 255, 0.7);
+        border: none;
+        border-radius: 50%;
+        width: 1.5rem;
+        height: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.2s;
+        z-index: 5;
+    }
+
+    &:hover .section-hide-btn {
+        opacity: 0.7;
+    }
+
+    .section-hide-btn:hover {
+        opacity: 1;
+    }
+}
+
 .contents {
+    position: relative;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     height: calc(100% - 7rem);
+}
+
+.embedded-desktop {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    overflow: hidden;
+    background: transparent;
 }
 
 .main-content {

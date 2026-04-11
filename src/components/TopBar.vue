@@ -3,7 +3,10 @@ import AccountPanel from './account/AccountPanel.vue'
 import TerminalPanel from './logsAndTerminal/TerminalPanel.vue'
 import PortPanel from './settings/PortPanel.vue'
 import UpdateModal from './settings/UpdateModal.vue'
+import TabBar from './shell/TabBar.vue'
+import AppMenuDropdown from './shell/AppMenuDropdown.vue'
 import { mixin } from '@/mixins/mixin'
+import usePreferences from '@/mixins/usePreferences'
 import messages from '@/assets/lang'
 
 import events from '@/events/events'
@@ -14,8 +17,10 @@ export default {
   name: 'TopBar',
   components: {
     AccountPanel,
+    TabBar,
+    AppMenuDropdown,
   },
-  mixins: [mixin],
+  mixins: [mixin, usePreferences],
   props: {
     initBarData: {
       type: Object,
@@ -68,6 +73,7 @@ export default {
       showPower: false,
       showPowerTitle: '',
       showPowerMessage: '',
+      isFullscreen: false,
     }
   },
   computed: {
@@ -145,6 +151,10 @@ export default {
     this.getUserInfo()
     this.getUsbStatus()
     this.getHardwareInfo()
+    document.addEventListener('fullscreenchange', this.onFullscreenChange)
+  },
+  beforeDestroy() {
+    document.removeEventListener('fullscreenchange', this.onFullscreenChange)
   },
 
   methods: {
@@ -448,14 +458,30 @@ export default {
       this.restart = 'Restart'
       this.shutdown = 'Shutdown'
     },
+
+    toggleFullscreen() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen()
+      } else {
+        document.documentElement.requestFullscreen()
+      }
+    },
+    onFullscreenChange() {
+      this.isFullscreen = !!document.fullscreenElement
+    },
+    toggleOpenMode() {
+      const next = this.openMode === 'embedded' ? 'newTab' : 'embedded'
+      this.setPreference('openMode', next)
+    },
   },
 }
 </script>
 
 <template>
   <div class="navbar top-bar is-flex is-align-items-center _fixed-height">
-    <div class="navbar-brand ml-4 _fixed-height">
-      <!-- SideBar Button Start -->
+    <!-- LEFT SECTION: App menu + Sidebar(mobile) + Account -->
+    <div class="topbar-left">
+      <!-- SideBar Button (mobile only) -->
       <div id="sidebar-btn" class="is-flex is-align-items-center navbar-item">
         <b-tooltip
           :active="!$store.state.isMobile"
@@ -468,9 +494,11 @@ export default {
           </div>
         </b-tooltip>
       </div>
-      <!-- SideBar Button Start -->
 
-      <!-- Account Dropmenu Start -->
+      <!-- App Menu Dropdown -->
+      <AppMenuDropdown />
+
+      <!-- Account Dropmenu -->
       <b-dropdown
         animation="fade1"
         aria-role="list"
@@ -482,7 +510,7 @@ export default {
           <b-tooltip
             :active="!$store.state.isMobile"
             :label="$t('Account')"
-            position="is-right"
+            position="is-bottom"
             type="is-dark"
             @click.native="$messageBus('account_setting')"
           >
@@ -491,26 +519,61 @@ export default {
             </p>
           </b-tooltip>
         </template>
-
         <b-dropdown-item :focusable="false" aria-role="menu-item" class="p-0" custom>
           <AccountPanel />
         </b-dropdown-item>
       </b-dropdown>
-      <!-- Account Dropmenu End -->
+    </div>
 
-      <!-- Settings Dropmenu Start -->
+    <!-- CENTER SECTION: TabBar -->
+    <div class="topbar-center">
+      <TabBar />
+    </div>
+
+    <!-- RIGHT SECTION: Terminal + Fullscreen + Settings -->
+    <div class="topbar-right">
+      <!-- Terminal -->
+      <div class="navbar-item" @click="showTerminalPanel">
+        <b-tooltip
+          :active="!$store.state.isMobile"
+          :label="$t('Terminal & Logs')"
+          position="is-bottom"
+          type="is-dark"
+        >
+          <b-icon class="picon" icon="terminal-outline" pack="casa" size="is-20" />
+        </b-tooltip>
+      </div>
+
+      <!-- Fullscreen Toggle -->
+      <div class="navbar-item" @click="toggleFullscreen">
+        <b-tooltip
+          :active="!$store.state.isMobile"
+          :label="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
+          position="is-bottom"
+          type="is-dark"
+        >
+          <b-icon
+            class="picon"
+            :icon="isFullscreen ? 'fullscreen-exit' : 'fullscreen'"
+            size="is-20"
+          />
+        </b-tooltip>
+      </div>
+
+      <!-- Settings Dropmenu -->
       <b-dropdown
         ref="settingsDrop"
         animation="fade1"
         aria-role="list"
         class="navbar-item"
+        position="is-bottom-left"
         @active-change="onOpen"
       >
         <template #trigger>
           <b-tooltip
             :active="!$store.state.isMobile"
             :label="$t('Settings')"
-            position="is-right"
+            position="is-bottom"
             type="is-dark"
             @click.native="$messageBus('dashboardsetting')"
           >
@@ -530,7 +593,31 @@ export default {
           <h2 class="_title mb-4 has-text-weight-bold">
             {{ $t("Settings") }}
           </h2>
-          <!-- Search Engine Switch Start  -->
+
+          <!-- Open Mode Toggle -->
+          <div
+            class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
+          >
+            <div class="is-flex is-align-items-center is-flex-grow-1 _is-normal">
+              <b-icon class="mr-1 ml-2" icon="open-in-new" size="is-20" />
+              {{ $t("Open Mode") }}
+            </div>
+            <div>
+              <b-field>
+                <b-switch
+                  :value="openMode === 'embedded'"
+                  class="is-flex-direction-row-reverse mr-0 _small"
+                  type="is-dark"
+                  @input="toggleOpenMode"
+                />
+              </b-field>
+            </div>
+            <span class="ml-1 is-size-7" style="min-width: 4.5rem">
+              {{ openMode === 'embedded' ? 'Embedded' : 'New Tab' }}
+            </span>
+          </div>
+
+          <!-- Search Engine Switch -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -549,9 +636,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!-- Search Engine Switch End  -->
 
-          <!-- Search Engine Start -->
+          <!-- Search Engine -->
           <div
             v-if="barData.search_switch"
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
@@ -575,9 +661,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!-- Search Engine End -->
 
-          <!-- Language Start -->
+          <!-- Language -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -595,9 +680,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!-- Language End -->
 
-          <!-- WebUI Port Start -->
+          <!-- WebUI Port -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -614,9 +698,8 @@ export default {
               </b-button>
             </div>
           </div>
-          <!-- WebUI Port End -->
 
-          <!-- Background Start -->
+          <!-- Wallpaper -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -630,9 +713,8 @@ export default {
               </b-button>
             </div>
           </div>
-          <!-- Background End -->
 
-          <!--  Show other Docker container app(s) Switch Start  -->
+          <!-- Show other Docker container app(s) -->
           <div
             v-if="$store.state.notImportList.length > 0"
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
@@ -652,9 +734,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!--  Show other Docker container app(s) Switch End  -->
 
-          <!--  Show other Docker container app(s) Switch Start  -->
+          <!-- RSS News -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -674,8 +755,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!--  Show other Docker container app(s) Switch End  -->
-          <!--  Recommended modules Switch Start  -->
+
+          <!-- Show Recommended Apps -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -699,9 +780,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!-- Recommended modules Switch End  -->
 
-          <!-- Automount USB Drive Start  -->
+          <!-- Automount USB Drive -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
           >
@@ -732,9 +812,8 @@ export default {
               </b-field>
             </div>
           </div>
-          <!-- Automount USB Drive End  -->
 
-          <!-- Update Start -->
+          <!-- Update -->
           <div class="_is-large hover-effect _is-radius pr-2 mr-4 ml-4">
             <div class="is-flex is-align-items-center">
               <div class="is-flex is-align-items-center is-flex-grow-1 _is-normal">
@@ -761,8 +840,8 @@ export default {
               </b-button>
             </div>
           </div>
-          <!-- Update End -->
-          <!-- Restart or Shutdown Start -->
+
+          <!-- Restart or Shutdown -->
           <div
             class="is-flex is-align-content-center is-justify-content-center _footer mt-4 pl-3 pr-3 pt-2 pb-2"
           >
@@ -786,32 +865,11 @@ export default {
               {{ $t(shutdown) }}
             </div>
           </div>
-          <!-- Restart or Shutdown End -->
         </b-dropdown-item>
       </b-dropdown>
-      <!-- Settings Dropmenu End -->
-
-      <!-- Terminal  Start -->
-      <div class="is-flex is-align-items-center ml-3 _fixed-height" @click="showTerminalPanel">
-        <b-tooltip
-          :active="!$store.state.isMobile"
-          :label="$t('Terminal & Logs')"
-          position="is-right"
-          style="height: 1.25rem"
-          type="is-dark"
-        >
-          <b-icon class="picon" icon="terminal-outline" pack="casa" size="is-20" />
-        </b-tooltip>
-      </div>
-      <!-- Terminal  End -->
     </div>
 
-    <div class="navbar-menu">
-      <div class="navbar-end mr-3">
-        <!-- <b-icon pack="far" icon="comment-alt"></b-icon> -->
-      </div>
-    </div>
-
+    <!-- Power Modal -->
     <b-modal v-model="showPower" :can-cancel="false" class="_modal" scroll="clip" width="20rem">
       <b-message @close="resetPower">
         <template #header>
@@ -859,7 +917,7 @@ export default {
 
 ._footer {
 	height: 3.5rem;
-	border-top: 1px solid rgb(228 233 237);
+	border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 ._title {
@@ -870,7 +928,8 @@ export default {
 	letter-spacing: 0em;
 	text-align: left;
 	padding: 1.25rem 1.25rem 0.5rem 1.5rem;
-	border-bottom: 1px solid rgb(228 233 237);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+	color: #fff;
 }
 
 ._is-normal {
@@ -899,51 +958,82 @@ export default {
 	position: relative;
 	z-index: 20;
 	height: 2.75rem;
-	background: rgba(255, 255, 255, 1);
+	background-color: $backDropColor;
+	backdrop-filter: $backDropBlur;
+	display: flex;
+	justify-content: space-between;
 
-	.navbar-brand {
-		margin-left: 1.25rem;
+	.topbar-left,
+	.topbar-right {
+		display: flex;
+		align-items: center;
+		flex-shrink: 0;
+	}
 
-		.picon {
-			cursor: pointer;
-		}
+	.topbar-left {
+		padding-left: 0.75rem;
+		gap: 0;
+	}
 
-		.navbar-item {
-			height: 2.75rem;
-			padding: 0.75rem 0.75rem 0.5rem;
+	.topbar-center {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
 
-			.icon {
-				&:only-child {
-					margin-left: 0;
-					margin-right: 0;
-				}
+	.topbar-right {
+		padding-right: 0.75rem;
+		gap: 0;
+	}
+
+	.picon {
+		cursor: pointer;
+	}
+
+	.navbar-item {
+		height: 2.75rem;
+		padding: 0.75rem 0.5rem 0.5rem;
+		display: flex;
+		align-items: center;
+
+		.icon {
+			&:only-child {
+				margin-left: 0;
+				margin-right: 0;
 			}
 		}
+	}
 
-		.dropdown + .dropdown {
-			margin-left: 0;
-		}
+	.dropdown + .dropdown {
+		margin-left: 0;
+	}
 
-		.dropdown-trigger,
-		.tooltip-trigger {
-			height: 1.5rem;
-		}
+	.dropdown-trigger,
+	.tooltip-trigger {
+		height: 1.5rem;
+	}
 
-		.dropdown-menu {
-			margin-top: 0.5rem;
-			min-width: 22.5rem;
+	.dropdown-menu {
+		margin-top: 0.5rem;
+		min-width: 22.5rem;
 
-			.dropdown-content {
-				background: rgba(255, 255, 255, 1);
-				border-radius: 10px;
+		.dropdown-content {
+			background-color: $backDropColor;
+			backdrop-filter: $backDropBlur;
+			border-radius: $backDropBorderRadius;
+			box-shadow: $backDropShadow;
+			border: $backDropBorder;
+			color: #fff;
 
-				.dropdown-item {
-					padding: 0.875rem 1.25rem;
-					text-align: left;
+			.dropdown-item {
+				padding: 0.875rem 1.25rem;
+				text-align: left;
+				color: #fff;
 
-					.item {
-						height: 2rem;
-					}
+				.item {
+					height: 2rem;
 				}
 			}
 		}
@@ -974,7 +1064,6 @@ export default {
 			}
 		}
 
-		// TODO: remove this when the switch to be component.
 		&._small input[type="checkbox"] {
 			& + .check {
 				width: 2.286em;
@@ -1012,7 +1101,47 @@ export default {
 	}
 
 	.icon {
-		color: rgb(74, 74, 74);
+		color: rgba(255, 255, 255, 0.9);
+	}
+
+	.dropdown-content .icon,
+	.dropdown-content ._is-normal,
+	.dropdown-content ._has-text-gray {
+		color: rgba(255, 255, 255, 0.85);
+	}
+
+	.dropdown-content .hover-effect:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.dropdown-content .hover-effect-attention:hover {
+		background: rgba(255, 100, 50, 0.15);
+	}
+
+	.dropdown-content .set-select {
+		.select::after {
+			border-color: rgba(255, 255, 255, 0.7) !important;
+		}
+
+		select {
+			background-color: transparent !important;
+			border-color: rgba(255, 255, 255, 0.3) !important;
+			color: #fff !important;
+
+			option {
+				background: #35363a;
+				color: #fff;
+			}
+		}
+	}
+
+	.dropdown-content .switch input[type="checkbox"] + .check {
+		background: rgba(255, 255, 255, 0.2);
+		border-color: rgba(255, 255, 255, 0.3);
+	}
+
+	.dropdown-content ._footer {
+		border-top-color: rgba(255, 255, 255, 0.12);
 	}
 }
 
@@ -1058,11 +1187,7 @@ export default {
 
 @media (prefers-color-scheme: dark) {
 	.top-bar {
-		background: rgba(53, 54, 58, 1);
-
-		.picon {
-			color: #fff;
-		}
+		background-color: rgba(30, 30, 34, 0.6);
 	}
 }
 

@@ -1,0 +1,31 @@
+:root {
+  --accent-color: #007AFF;
+}
+
+.button.is-primary,
+.button.is-dark {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+}
+
+.b-checkbox.checkbox input[type="checkbox"]:checked + .check {
+  border-color: var(--accent-color) !important;
+  background: var(--accent-color) !important;
+}
+
+.switch input[type="checkbox"]:checked + .check {
+  background: var(--accent-color) !important;
+}
+
+.progress::-webkit-progress-value {
+  background-color: var(--accent-color) !important;
+}
+
+.progress::-moz-progress-bar {
+  background-color: var(--accent-color) !important;
+}
+
+a.has-text-primary,
+.has-text-primary {
+  color: var(--accent-color) !important;
+}

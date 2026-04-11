@@ -2,7 +2,7 @@
 	<div id="app" :class="{'is-dark-bg':$route.meta.showBackground}" class="is-flex is-flex-direction-column" :style="{'--vh': vh}" >
 		<template v-if="$route.meta.showBackground">
 			<!-- Background Layer Start -->
-			<casa-wallpaper :animate="isWelcome?initAni:noneAni"></casa-wallpaper>
+			<casa-wallpaper :animate="isWelcome?initAni:noneAni" :class="{ 'wallpaper-blur': shouldBlurWallpaper }"></casa-wallpaper>
 			<!-- Background Layer End -->
 
 			<div class="base-bar is-flex"
@@ -31,6 +31,7 @@ import BrandBar      from './components/BrandBar.vue'
 import ContactBar    from './components/ContactBar.vue'
 import CasaWallpaper from './components/wallpaper/CasaWallpaper.vue'
 import {mixin}       from './mixins/mixin';
+import usePreferences from './mixins/usePreferences';
 
 const customIconConfig = {
 	customIconPacks: {
@@ -69,7 +70,7 @@ export default {
 		ContactBar,
 		CasaWallpaper
 	},
-	mixins: [mixin],
+	mixins: [mixin, usePreferences],
 	data() {
 		return {
 			//isLoading: true,
@@ -101,7 +102,22 @@ export default {
 		},
 		isWelcome() {
 			return this.$store.state.needInitialization
-		}
+		},
+		hasOpenApps() {
+			return this.$store.getters['windowManager/openApps'].length > 0
+		},
+		shouldBlurWallpaper() {
+			return this.wallpaperBlurOnApps && this.hasOpenApps && !this.$store.getters['windowManager/showDashboard']
+		},
+	},
+
+	watch: {
+		accentColor: {
+			handler(val) {
+				document.documentElement.style.setProperty('--accent-color', val)
+			},
+			immediate: true,
+		},
 	},
 
 	created() {
@@ -170,5 +186,10 @@ _____             _____ _____
 		bottom: 0;
 		z-index: 10;
 	}
+}
+
+.wallpaper-blur {
+	filter: blur(8px);
+	transition: filter 0.3s ease;
 }
 </style>

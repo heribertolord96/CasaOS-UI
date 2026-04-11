@@ -44,6 +44,12 @@
 // following the casa design specification
 @import "common/dropdown";
 
+// Accent color overrides
+@import "accent-overrides";
+
+// Dashboard layout preferences
+@import "common/dashboard-layout";
+
 // Pages and Components
 @import "components/filebrowser";
 

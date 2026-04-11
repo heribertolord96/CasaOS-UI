@@ -191,15 +191,22 @@ export default {
 		 */
 		getDockerUsage() {
 			this.$api.container.getHardwareUsage().then((res) => {
+				const rows = (res.data && res.data.data) ? res.data.data : [];
 				let id = 0;
-				this.containerCpuList = res.data.data.map((item) => {
+				this.containerCpuList = rows.map((item) => {
 					let usage = 0;
-					if (item.previous != null) {
-						// Look at here  https://docs.docker.com/engine/api/v1.41/#operation/ContainerStats
-						const cpu_delta =
-							item.data.cpu_stats.cpu_usage.total_usage - item.previous.cpu_stats.cpu_usage.total_usage;
-						const system_cpu_delta =
-							item.data.cpu_stats.system_cpu_usage - item.previous.cpu_stats.system_cpu_usage + 1;
+					const curr = item.data && item.data.cpu_stats;
+					const prev = item.previous && item.previous.cpu_stats;
+					if (
+						item.previous != null
+						&& curr && prev
+						&& curr.cpu_usage && prev.cpu_usage
+						&& typeof curr.system_cpu_usage === 'number'
+						&& typeof prev.system_cpu_usage === 'number'
+					) {
+						// https://docs.docker.com/engine/api/v1.41/#operation/ContainerStats
+						const cpu_delta = curr.cpu_usage.total_usage - prev.cpu_usage.total_usage;
+						const system_cpu_delta = curr.system_cpu_usage - prev.system_cpu_usage + 1;
 						usage = Math.floor((cpu_delta / system_cpu_delta) * 1000) / 10;
 					}
 					id++;
@@ -211,20 +218,24 @@ export default {
 					};
 				});
 
-				this.containerRamList = res.data.data.map((item) => {
+				this.containerRamList = rows.map((item) => {
 					let id = 0;
-					const getCacheValue = (item) => {
-						if (has(item.data.memory_stats.stats, "inactive_file")) {
-							return item.data.memory_stats.stats.inactive_file;
-						} else if (has(item.data.memory_stats.stats, "cache")) {
-							return item.data.memory_stats.stats.cache;
-						} else if (has(item.data.memory_stats.stats, "total_inactive_file")) {
-							return item.data.memory_stats.stats.total_inactive_file;
-						} else {
+					const getCacheValue = (row) => {
+						const stats = row.data && row.data.memory_stats && row.data.memory_stats.stats;
+						if (!stats) {
 							return 0;
 						}
+						if (has(stats, "inactive_file")) {
+							return stats.inactive_file;
+						} else if (has(stats, "cache")) {
+							return stats.cache;
+						} else if (has(stats, "total_inactive_file")) {
+							return stats.total_inactive_file;
+						}
+						return 0;
 					};
-					const used_memory = "stats" in item.data.memory_stats ? item.data.memory_stats.usage - getCacheValue(item) : NaN;
+					const mem = item.data && item.data.memory_stats;
+					const used_memory = mem && "stats" in mem ? mem.usage - getCacheValue(item) : NaN;
 					id++;
 					return {
 						id: id,
@@ -235,6 +246,9 @@ export default {
 				});
 				this.containerCpuList = slice(orderBy(this.containerCpuList, ["usage"], ["desc"]), 0, 8);
 				this.containerRamList = slice(orderBy(this.containerRamList, ["usage"], ["desc"]), 0, 8);
+			}).catch(() => {
+				this.containerCpuList = [];
+				this.containerRamList = [];
 			});
 		},
 

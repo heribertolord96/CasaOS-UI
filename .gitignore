@@ -26,6 +26,7 @@ pnpm-debug.log*
 unused-files.json
 
 # package manager
+.pnpm-store
 #.yarnrc.yml
 #!/releases/yarn**
 .yarn/*

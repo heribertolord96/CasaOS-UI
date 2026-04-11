@@ -4,7 +4,6 @@ import camelCase from 'lodash/camelCase'
 import find from 'lodash/find'
 import isEqual from 'lodash/isEqual'
 import vueCustomScrollbar from 'vue-custom-scrollbar'
-import Settings from '@/components/widgets/Settings.vue'
 import 'vue-custom-scrollbar/dist/vueScrollbar.css'
 
 const widgetsComponents = require.context(
@@ -18,7 +17,6 @@ const widgetsConfig = 'widgets_config'
 export default {
   name: 'SideBar',
   components: {
-    Settings,
     VueCustomScrollbar: vueCustomScrollbar,
   },
   data() {
@@ -74,9 +72,19 @@ export default {
     this.getConfig()
 
     window.addEventListener('resize', this.handleResize)
+    this.$EventBus.$on('casaUI:widgetsConfigChanged', this.onWidgetsConfigChanged)
+  },
+
+  beforeDestroy() {
+    window.removeEventListener('resize', this.handleResize)
+    this.$EventBus.$off('casaUI:widgetsConfigChanged', this.onWidgetsConfigChanged)
   },
 
   methods: {
+    onWidgetsConfigChanged(newSettings) {
+      this.widgetsSettings = newSettings
+      this.saveData(newSettings)
+    },
     /**
      * @description: Get Widgets Configs
      * @return {*} void
@@ -145,11 +153,6 @@ export default {
       })
     },
 
-    handleChange(data) {
-      this.widgetsSettings = data
-      this.saveData(this.widgetsSettings)
-    },
-
     handleResize() {
       const ww = window.innerWidth
       if (this.isLoading)
@@ -172,7 +175,6 @@ export default {
         <component :is="item.app" :class="{ 'last-block': index === activeApps.length - 1 }" />
       </div>
     </VueCustomScrollbar>
-    <Settings v-model="widgetsSettings" :class="{ 'mt-4': activeApps.length > 0 }" @change="handleChange" />
   </div>
 </template>
 

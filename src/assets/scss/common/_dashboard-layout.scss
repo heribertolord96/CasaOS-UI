@@ -1,0 +1,58 @@
+// Dashboard layout preferences: icon size, grid density, label visibility
+
+// Icon sizes
+.icon-size-small {
+  .app-card {
+    .is-64x64 {
+      width: 48px !important;
+      height: 48px !important;
+    }
+  }
+
+  .app-list {
+    @include desktop {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    @include fullhd {
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
+  }
+}
+
+.icon-size-large {
+  .app-card {
+    .is-64x64 {
+      width: 80px !important;
+      height: 80px !important;
+    }
+  }
+
+  .app-list {
+    @include desktop {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    @include fullhd {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+}
+
+// Grid density
+.grid-compact {
+  .app-list {
+    gap: 0.5rem;
+  }
+}
+
+.grid-spacious {
+  .app-list {
+    gap: 1.5rem;
+  }
+}
+
+// Hide labels
+.hide-app-labels {
+  .app-card .one-line {
+    display: none !important;
+  }
+}

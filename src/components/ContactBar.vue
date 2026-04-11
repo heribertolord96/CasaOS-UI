@@ -44,6 +44,18 @@
 			modifiers: { offset: { offset: '0,4px' } }
 		}" enter-active-class="fade-enter-active" leave-active-class="" transition='fade' trigger="hover">
 			<div class="popper  tooltip-content">
+				Forked by Heriberto H
+			</div>
+			<a slot="reference" rel="noopener" href="https://github.com/heribertolord96" target="_blank">
+				<b-icon icon="account-outline" pack="casa"></b-icon>
+			</a>
+		</popper>
+
+		<popper :options="{
+			placement: 'top',
+			modifiers: { offset: { offset: '0,4px' } }
+		}" enter-active-class="fade-enter-active" leave-active-class="" transition='fade' trigger="hover">
+			<div class="popper  tooltip-content">
 				{{ $t('Share CasaOS') }}
 			</div>
 			<a slot="reference" @click="showShareModal">

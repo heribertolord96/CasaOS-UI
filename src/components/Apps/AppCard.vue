@@ -156,7 +156,17 @@ export default {
         this.openSystemApps(item)
       }
       else if (this.isLinkApp) {
-        window.open(item.hostname, '_blank')
+        const openMode = this.$store.getters['preferences/openMode']
+        if (openMode === 'embedded') {
+          this.$store.dispatch('windowManager/openApp', {
+            id: item.name,
+            name: item.name,
+            icon: item.icon || '',
+            url: item.hostname,
+          })
+        } else {
+          window.open(item.hostname, '_blank')
+        }
         this.removeIdFromSessionStorage(item.name)
       }
       else {

@@ -67,16 +67,17 @@ module.exports = {
 				.use(require("css-minimizer-webpack-plugin"), [
 					{ minimizerOptions: { preset: ["default", { discardComments: { removeAll: true } }] } },
 				]);
-		} else {
-			// Development only
-			config.plugin('webpack-bundle-analyzer')
-				.use(require('webpack-bundle-analyzer').BundleAnalyzerPlugin)
 		}
 	},
 	devServer: {
-		open: true,
+		open: false,
 		port: 8080,
+		host: '0.0.0.0',
 		hot: true,
+		allowedHosts: 'all',
+		client: {
+			webSocketURL: 'auto://0.0.0.0:0/ws',
+		},
 		proxy: {
 			"/v1": {
 				target: `http://${process.env.VUE_APP_DEV_IP}:${process.env.VUE_APP_DEV_PORT}`,

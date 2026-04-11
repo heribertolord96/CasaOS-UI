@@ -1,12 +1,3 @@
-/*
- * @LastEditors: Jerryk jerry@icewhale.org
- * @LastEditTime: 2023-02-12 18:32:17
- * @FilePath: \CasaOS-UI-0.4.2\src\mixins\app\Business_OpenThirdApp.js
- * @Description:
- *
- * Copyright (c) 2022 by IceWhale, All Rights Reserved.
- */
-
 export default {
 	methods: {
 		openAppToNewWindow(appInfo) {
@@ -19,6 +10,17 @@ export default {
 				const scheme = appInfo.scheme || 'http'
 				const port = appInfo.port ? `:${appInfo.port}` : ''
 				const url = `${scheme}://${hostIp}${port}${appInfo.index}`
+
+				const openMode = this.$store.getters['preferences/openMode']
+				if (openMode === 'embedded' && isNewWindows) {
+					this.$store.dispatch('windowManager/openApp', {
+						id: appInfo.name || appInfo.id,
+						name: appInfo.name || appInfo.id,
+						icon: appInfo.icon || appInfo.image || '',
+						url: url,
+					})
+					return
+				}
 
 				if (isNewWindows) {
 					window.open(url);
