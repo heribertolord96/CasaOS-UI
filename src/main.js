@@ -20,21 +20,30 @@ import '@/assets/scss/app.scss'
 
 const io = require("socket.io-client");
 
-const isDev = process.env.NODE_ENV === 'dev';
+// vue-cli-service serve sets NODE_ENV to "development" (not "dev" from --mode dev).
+const isDev = process.env.NODE_ENV === 'development'
+const useDirectApi = isDev && process.env.VUE_APP_DEV_DIRECT_API === '1'
 const protocol = document.location.protocol
 const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
 const devIp = process.env.VUE_APP_DEV_IP
 const devPort = process.env.VUE_APP_DEV_PORT
 const localhost = document.location.host
 const localhostName = document.location.hostname
-const baseIp = isDev ? `${devIp}` : `${localhostName}`
-const baseURL = isDev ? `${devIp}:${devPort}` : `${localhost}`
+const baseIp = isDev && devIp ? `${devIp}` : `${localhostName}`
+const baseURL =
+	isDev && devIp && devPort && useDirectApi ? `${devIp}:${devPort}` : `${localhost}`
 const wsURL = `${wsProtocol}//${baseURL}`
 
-const socket = io( {
-	transports: ['websocket', 'polling'],
-	path: '/v2/message_bus/socket.io/',
-});
+const socket =
+	isDev && devIp && devPort && useDirectApi
+		? io(wsURL, {
+			transports: ['websocket', 'polling'],
+			path: '/v2/message_bus/socket.io/',
+		})
+		: io({
+			transports: ['websocket', 'polling'],
+			path: '/v2/message_bus/socket.io/',
+		})
 
 Vue.use(Buefy)
 Vue.use(VueFullscreen)

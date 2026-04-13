@@ -23,16 +23,34 @@ const defaults = {
    * Reset via Restore initial configuration → RESET_PREFERENCES.
    */
   embeddedViewerMode: 'classic',
+  /** Master switch when urlBarMode is auto: show address bar in embedded windows */
+  showUrlBar: false,
+  /** auto: follow showUrlBar; always: bar available per-window toggle; never: hide bar */
+  urlBarMode: 'auto',
+}
+
+function normalizeUrlBarMode(v) {
+  if (v === 'auto' || v === 'always' || v === 'never') {
+    return v
+  }
+  return defaults.urlBarMode
 }
 
 function loadFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      const merged = { ...defaults, ...JSON.parse(raw) }
+      const parsed = JSON.parse(raw)
+      const merged = { ...defaults, ...parsed }
       if (merged.embeddedViewerMode !== 'classic' && merged.embeddedViewerMode !== 'enhanced') {
         merged.embeddedViewerMode = defaults.embeddedViewerMode
       }
+      merged.urlBarMode = normalizeUrlBarMode(merged.urlBarMode)
+      // Migrate legacy key from earlier fork
+      if (parsed.showEmbeddedUrlBar != null && parsed.showUrlBar === undefined) {
+        merged.showUrlBar = !!parsed.showEmbeddedUrlBar
+      }
+      delete merged.showEmbeddedUrlBar
       return merged
     }
   } catch (e) {
@@ -68,6 +86,8 @@ const preferences = {
     shellOpacity: s => s.shellOpacity,
     rememberWorkspace: s => s.rememberWorkspace,
     embeddedViewerMode: s => s.embeddedViewerMode,
+    showUrlBar: s => s.showUrlBar,
+    urlBarMode: s => s.urlBarMode,
     isSectionHidden: s => id => s.hiddenSections.includes(id),
   },
 
@@ -77,7 +97,11 @@ const preferences = {
         if (key === 'embeddedViewerMode' && value !== 'classic' && value !== 'enhanced') {
           return
         }
-        state[key] = value
+        if (key === 'urlBarMode') {
+          state.urlBarMode = normalizeUrlBarMode(value)
+        } else {
+          state[key] = value
+        }
         saveToStorage(state)
       }
     },

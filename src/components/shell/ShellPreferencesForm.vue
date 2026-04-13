@@ -401,6 +401,62 @@ export default {
         </button>
       </div>
     </div>
+    <div v-if="openMode === 'embedded'" class="shell-pref-block px-4 mb-2">
+      <p class="is-size-7 mb-1 shell-pref-muted">{{ $t('URL bar mode') }}</p>
+      <p class="is-size-7 shell-pref-muted mb-2">
+        {{ $t('URL bar mode hint') }}
+      </p>
+      <div class="shell-pref-option-row shell-pref-option-row--wrap">
+        <button
+          type="button"
+          class="shell-pref-pill"
+          :class="{ 'is-active': urlBarMode === 'never' }"
+          @click.stop="setPreference('urlBarMode', 'never')"
+        >
+          {{ $t('Never') }}
+        </button>
+        <button
+          type="button"
+          class="shell-pref-pill"
+          :class="{ 'is-active': urlBarMode === 'auto' }"
+          @click.stop="setPreference('urlBarMode', 'auto')"
+        >
+          {{ $t('Auto') }}
+        </button>
+        <button
+          type="button"
+          class="shell-pref-pill"
+          :class="{ 'is-active': urlBarMode === 'always' }"
+          @click.stop="setPreference('urlBarMode', 'always')"
+        >
+          {{ $t('Always') }}
+        </button>
+      </div>
+    </div>
+    <div v-if="openMode === 'embedded' && urlBarMode === 'auto'" class="shell-pref-block px-4 mb-2">
+      <p class="is-size-7 mb-1 shell-pref-muted">{{ $t('Address bar') }}</p>
+      <p class="is-size-7 shell-pref-muted mb-2">
+        {{ $t('Show address bar in embedded windows') }}
+      </p>
+      <div class="shell-pref-option-row">
+        <button
+          type="button"
+          class="shell-pref-pill"
+          :class="{ 'is-active': showUrlBar }"
+          @click.stop="setPreference('showUrlBar', true)"
+        >
+          {{ $t('Show') }}
+        </button>
+        <button
+          type="button"
+          class="shell-pref-pill"
+          :class="{ 'is-active': !showUrlBar }"
+          @click.stop="setPreference('showUrlBar', false)"
+        >
+          {{ $t('Hide') }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 

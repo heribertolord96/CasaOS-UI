@@ -46,9 +46,9 @@
   --shell-tab-toggle-active-bg: rgba(255, 255, 255, calc(0.22 * var(--shell-opacity-mul, 1)));
   --shell-tab-toggle-active-border: rgba(255, 255, 255, 0.35);
 
-  --shell-tab-text: rgba(255, 255, 255, 0.7);
-  --shell-tab-hover-bg: rgba(255, 255, 255, calc(0.1 * var(--shell-opacity-mul, 1)));
-  --shell-tab-active-bg: rgba(255, 255, 255, calc(0.15 * var(--shell-opacity-mul, 1)));
+  --shell-tab-text: rgba(255, 255, 255, 0.84);
+  --shell-tab-hover-bg: rgba(255, 255, 255, calc(0.12 * var(--shell-opacity-mul, 1)));
+  --shell-tab-active-bg: rgba(255, 255, 255, calc(0.18 * var(--shell-opacity-mul, 1)));
   --shell-tab-active-text: #ffffff;
   --shell-tab-count-bg: rgba(255, 255, 255, calc(0.18 * var(--shell-opacity-mul, 1)));
   --shell-tab-count-bg-active: rgba(255, 255, 255, calc(0.28 * var(--shell-opacity-mul, 1)));
@@ -121,9 +121,9 @@
   --shell-tab-toggle-active-bg: rgba(0, 0, 0, calc(0.08 * var(--shell-opacity-mul, 1)));
   --shell-tab-toggle-active-border: rgba(0, 0, 0, 0.2);
 
-  --shell-tab-text: rgba(45, 45, 52, 0.75);
-  --shell-tab-hover-bg: rgba(0, 0, 0, calc(0.06 * var(--shell-opacity-mul, 1)));
-  --shell-tab-active-bg: rgba(0, 0, 0, calc(0.1 * var(--shell-opacity-mul, 1)));
+  --shell-tab-text: rgba(45, 45, 52, 0.88);
+  --shell-tab-hover-bg: rgba(0, 0, 0, calc(0.08 * var(--shell-opacity-mul, 1)));
+  --shell-tab-active-bg: rgba(0, 0, 0, calc(0.12 * var(--shell-opacity-mul, 1)));
   --shell-tab-active-text: rgba(20, 20, 26, 0.98);
   --shell-tab-count-bg: rgba(0, 0, 0, calc(0.1 * var(--shell-opacity-mul, 1)));
   --shell-tab-count-bg-active: rgba(0, 0, 0, calc(0.16 * var(--shell-opacity-mul, 1)));

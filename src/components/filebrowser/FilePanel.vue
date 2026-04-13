@@ -443,10 +443,38 @@ export default {
 				this.isSideBarOpen = true;
 			}
 		},
+		/** Embedded window: shell back/forward updates ?cd= — reload listing. */
+		"$route.query.cd"(cd) {
+			if (this.$route.path !== "/files" || !this.$route.query.embedWindowId) {
+				return;
+			}
+			if (this.$route.query.newFile === "1") {
+				return;
+			}
+			if (typeof cd !== "string" || cd === "") {
+				return;
+			}
+			if (cd === this.currentPath) {
+				return;
+			}
+			this.getFileList(cd);
+		},
 	},
 
 	mounted() {
-		this.init();
+		const q = this.$route.query;
+		if (this.$route.path === "/files" && q.newFile === "1") {
+			this.init();
+		} else if (
+			this.$route.path === "/files" &&
+			q.embedWindowId &&
+			typeof q.cd === "string" &&
+			q.cd.length > 0
+		) {
+			this.init(q.cd);
+		} else {
+			this.init();
+		}
 
 		if (this.pageType == "file") {
 			this.beforeInit();
@@ -617,6 +645,26 @@ export default {
 				});
 
 			this.hideMobileSidebar();
+			this.syncEmbeddedShellQueryCd(path);
+		},
+
+		/**
+		 * Keep hash URL in sync so the shell address bar can show /DATA/... instead of a bare SPA URL.
+		 */
+		syncEmbeddedShellQueryCd(folderPath) {
+			if (this.$route.path !== "/files" || !this.$route.query.embedWindowId) {
+				return;
+			}
+			const cd = folderPath || this.currentPath || "/";
+			if (this.$route.query.cd === cd) {
+				return;
+			}
+			this.$router
+				.replace({
+					path: "/files",
+					query: { ...this.$route.query, cd },
+				})
+				.catch(() => {});
 		},
 
 		/**

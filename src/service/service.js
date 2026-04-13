@@ -3,8 +3,14 @@ import router from '@/router'
 import store from '@/store'
 // import { ToastProgrammatic as Toast } from 'buefy'
 
-
-const axiosBaseURL = ``
+// Default: empty baseURL in dev → requests hit the dev-server origin; vue.config.js proxy forwards /v1,/v2 to the API (no CORS).
+// Set VUE_APP_DEV_DIRECT_API=1 in .env.dev.local only if the gateway allows your UI origin (CORS); then DevTools shows :4080.
+const useDirectApi =
+	process.env.NODE_ENV === 'development' && process.env.VUE_APP_DEV_DIRECT_API === '1'
+const devIp = process.env.VUE_APP_DEV_IP
+const devPort = process.env.VUE_APP_DEV_PORT
+const axiosBaseURL =
+	useDirectApi && devIp && devPort ? `http://${devIp}:${devPort}` : ''
 
 //Create a axios instance, And set timeout to 30s
 const instance = axios.create({

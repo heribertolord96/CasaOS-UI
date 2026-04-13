@@ -132,21 +132,39 @@ export default {
 .tab-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   margin: 0;
+  padding: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0 0.5rem;
   justify-content: center;
   box-sizing: border-box;
 
   &::-webkit-scrollbar {
     height: 0;
+  }
+
+  /* b-tooltip wraps each tab; keep row compact and vertically centered */
+  :deep(.b-tooltip) {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  :deep(.tooltip-trigger) {
+    display: flex;
+    align-items: center;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
   }
 }
 
@@ -154,12 +172,14 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.625rem;
   border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
   max-width: 10rem;
-  height: 2rem;
+  min-height: 2rem;
+  height: auto;
+  max-height: 2.25rem;
   font-size: 0.8125rem;
   transition: all 0.2s ease;
   color: var(--shell-tab-text);

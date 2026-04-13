@@ -931,6 +931,9 @@ export default {
 	height: 2.75rem;
 	background-color: var(--shell-topbar-bg);
 	backdrop-filter: var(--shell-topbar-blur);
+	-webkit-backdrop-filter: var(--shell-topbar-blur);
+	border-bottom: 1px solid var(--shell-divider);
+	box-sizing: border-box;
 	display: flex;
 	justify-content: space-between;
 
@@ -949,8 +952,11 @@ export default {
 	.topbar-center {
 		flex: 1;
 		min-width: 0;
+		min-height: 0;
+		margin: 0;
+		padding: 0;
 		display: flex;
-		align-items: center;
+		align-items: stretch;
 		justify-content: center;
 	}
 
@@ -1156,12 +1162,6 @@ export default {
 @media screen and (max-width: 480px) {
 	#sidebar-btn {
 		display: flex !important;
-	}
-}
-
-@media (prefers-color-scheme: dark) {
-	.top-bar {
-		background-color: rgba(30, 30, 34, 0.6);
 	}
 }
 

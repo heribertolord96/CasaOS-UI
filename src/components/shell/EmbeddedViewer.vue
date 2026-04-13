@@ -28,11 +28,61 @@ export default {
       enhancedEntryActive: false,
       /** Enhanced: drag starts only after pointer moves past slop (px) — avoids breaking double-click maximize */
       pendingTitleDrag: null,
+      urlInputValue: '',
+      urlInputFocused: false,
+      /** Per-window visibility (persisted in workspace when rememberWorkspace is on) */
+      urlBarVisible: true,
+      navHistory: [],
+      navIndex: 0,
+      /** Skip pushing iframe URL to nav stack (back/forward) */
+      suppressHistoryPush: false,
     }
   },
   computed: {
     isEnhanced() {
       return this.$store.getters['preferences/embeddedViewerMode'] === 'enhanced'
+    },
+    urlBarMode() {
+      return this.$store.getters['preferences/urlBarMode']
+    },
+    showUrlBarPref() {
+      return this.$store.getters['preferences/showUrlBar']
+    },
+    shouldShowUrlBar() {
+      if (this.urlBarMode === 'never') {
+        return false
+      }
+      if (this.urlBarMode === 'always') {
+        return this.urlBarVisible
+      }
+      return this.showUrlBarPref && this.urlBarVisible
+    },
+    showTitlebarUrlToggle() {
+      return this.urlBarMode !== 'never'
+        && (this.urlBarMode === 'always' || this.showUrlBarPref)
+    },
+    isSameOrigin() {
+      try {
+        const u = new URL(this.iframeEntrySrc, window.location.href)
+        return u.origin === window.location.origin
+      } catch {
+        return false
+      }
+    },
+    canNavigate() {
+      return this.isSameOrigin && !this.loadError
+    },
+    canGoBack() {
+      return this.navIndex > 0
+    },
+    canGoForward() {
+      return this.navIndex < this.navHistory.length - 1
+    },
+    urlBarSecurityIcon() {
+      return this.isSameOrigin ? 'lock' : 'lock-open-variant'
+    },
+    urlBarSecurityClass() {
+      return this.isSameOrigin ? 'is-secure' : 'is-external'
     },
     dragShieldStyle() {
       if (!this.dragShield || !this.desktopRect) {
@@ -103,6 +153,10 @@ export default {
       const id = this.app.id || ''
       return id.startsWith('casa-store-') || id.startsWith('casa-files-')
     },
+    /** Native Files app in embedded shell — show filesystem path in URL bar, not the SPA URL. */
+    isCasaFilesEmbedded() {
+      return (this.app.id || '').startsWith('casa-files-')
+    },
   },
   watch: {
     isActive(val) {
@@ -110,17 +164,38 @@ export default {
         this.$nextTick(() => this.maybeSyncNavFromIframe())
       }
     },
+    'app.navUrl'() {
+      this.syncUrlInputFromApp()
+    },
+    'app.url'() {
+      this.syncUrlInputFromApp()
+    },
+    'app.urlBarVisible'(v) {
+      if (v === false) {
+        this.urlBarVisible = false
+      } else if (v === true) {
+        this.urlBarVisible = true
+      }
+    },
   },
   created() {
-    this.iframeEntrySrc = this.app.navUrl || this.app.url
+    const initial = this.app.navUrl || this.app.url
+    this.iframeEntrySrc = initial
+    if (this.isCasaFilesEmbedded) {
+      const p = this.filesPathFromShellUrl(initial)
+      this.urlInputValue = p != null ? p : initial
+    } else {
+      this.urlInputValue = initial
+    }
+    this.navHistory = [initial]
+    this.navIndex = 0
+    if (this.app.urlBarVisible === false) {
+      this.urlBarVisible = false
+    }
   },
   mounted() {
-    this.loadTimeout = setTimeout(() => {
-      if (this.loading) {
-        this.loading = false
-        this.loadError = true
-      }
-    }, 15000)
+    window.addEventListener('keydown', this.onEmbedHotkeys, true)
+    this.startLoadTimeout()
     if (this.isEnhanced) {
       this.$nextTick(() => {
         requestAnimationFrame(() => {
@@ -130,10 +205,276 @@ export default {
     }
   },
   beforeDestroy() {
+    window.removeEventListener('keydown', this.onEmbedHotkeys, true)
     clearTimeout(this.loadTimeout)
     this.endDragResize()
   },
   methods: {
+    syncUrlInputFromApp() {
+      if (this.urlInputFocused) {
+        return
+      }
+      const n = this.app.navUrl && String(this.app.navUrl).trim()
+      const full = n || this.app.url || ''
+      if (this.isCasaFilesEmbedded) {
+        const p = this.filesPathFromShellUrl(full)
+        this.urlInputValue = p != null ? p : full
+      } else {
+        this.urlInputValue = full
+      }
+    },
+    /**
+     * Allow only http(s) navigation; block javascript/data/vbscript.
+     * Relative paths resolve against the CasaOS shell origin (same-origin routes).
+     */
+    normalizeNavigateUrl(raw) {
+      const s = String(raw || '').trim()
+      if (!s) {
+        return null
+      }
+      const lower = s.toLowerCase()
+      if (
+        lower.startsWith('javascript:')
+        || lower.startsWith('data:')
+        || lower.startsWith('vbscript:')
+      ) {
+        return null
+      }
+      try {
+        const u = new URL(s)
+        if (u.protocol === 'http:' || u.protocol === 'https:') {
+          return u.href
+        }
+        return null
+      } catch {
+        /* continue */
+      }
+      try {
+        const u = new URL(s, window.location.href)
+        if (u.protocol === 'http:' || u.protocol === 'https:') {
+          return u.href
+        }
+      } catch {
+        /* continue */
+      }
+      const hostish = /^[\w.-]+(:\d+)?(\/|$)/.test(s) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/|$)/.test(s)
+      if (hostish && !/\s/.test(s)) {
+        try {
+          const cleaned = s.replace(/^\/+/, '')
+          return new URL(`http://${cleaned}`).href
+        } catch {
+          return null
+        }
+      }
+      return null
+    },
+    startLoadTimeout() {
+      clearTimeout(this.loadTimeout)
+      this.loadTimeout = setTimeout(() => {
+        if (this.loading) {
+          this.loading = false
+          this.loadError = true
+        }
+      }, 15000)
+    },
+    toggleUrlBar() {
+      this.urlBarVisible = !this.urlBarVisible
+      this.$store.dispatch('windowManager/setAppUrlBarVisible', {
+        appId: this.app.id,
+        urlBarVisible: this.urlBarVisible,
+      })
+    },
+    onUrlFocus() {
+      this.urlInputFocused = true
+      this.$nextTick(() => this.$refs.urlInput?.select())
+    },
+    onUrlBlur() {
+      this.urlInputFocused = false
+      this.$nextTick(() => {
+        if (!this.urlInputFocused) {
+          this.syncUrlInputFromApp()
+        }
+      })
+    },
+    onUrlCancel() {
+      this.syncUrlInputFromApp()
+      this.$refs.urlInput?.blur()
+    },
+    clearUrlInput() {
+      this.urlInputValue = ''
+      this.$refs.urlInput?.focus()
+    },
+    onReadonlyUrlActivate() {
+      if (!this.canNavigate) {
+        this.popout()
+      }
+    },
+    handleUrlSearch(query) {
+      const q = String(query || '').trim()
+      if (!q || !this.canNavigate) {
+        return
+      }
+      const engine = this.$store.state.searchEngine === ''
+        ? 'https://duckduckgo.com/?q='
+        : this.$store.state.searchEngine
+      const searchUrl = engine + encodeURIComponent(q)
+      this.urlInputValue = searchUrl
+      this.navigateToUrl(searchUrl, { pushHistory: true })
+    },
+    pushToHistory(url) {
+      if (!url || this.navHistory[this.navIndex] === url) {
+        return
+      }
+      if (this.navIndex < this.navHistory.length - 1) {
+        this.navHistory = this.navHistory.slice(0, this.navIndex + 1)
+      }
+      this.navHistory.push(url)
+      this.navIndex = this.navHistory.length - 1
+    },
+    filesPathFromShellUrl(href) {
+      if (!href || typeof href !== 'string') {
+        return null
+      }
+      try {
+        const u = new URL(href, window.location.href)
+        let h = u.hash.startsWith('#') ? u.hash.slice(1) : u.hash
+        if (!h.startsWith('/files')) {
+          return null
+        }
+        const qi = h.indexOf('?')
+        const search = qi >= 0 ? h.slice(qi + 1) : ''
+        const params = new URLSearchParams(search)
+        const cd = params.get('cd')
+        return cd != null && cd !== '' ? cd : '/'
+      } catch {
+        return null
+      }
+    },
+    embedWindowIdFromAppUrl() {
+      try {
+        const u = new URL(this.app.url, window.location.href)
+        const hash = u.hash.startsWith('#') ? u.hash.slice(1) : u.hash
+        const qi = hash.indexOf('?')
+        const search = qi >= 0 ? hash.slice(qi + 1) : ''
+        return new URLSearchParams(search).get('embedWindowId')
+      } catch {
+        return null
+      }
+    },
+    buildFilesEmbeddedHref(folderPath) {
+      const wid = this.embedWindowIdFromAppUrl()
+      if (!wid) {
+        return null
+      }
+      const cd = encodeURIComponent(folderPath)
+      const { origin, pathname } = window.location
+      return `${origin}${pathname}#/files?embedWindowId=${encodeURIComponent(wid)}&cd=${cd}`
+    },
+    navigateToUrl(href, { pushHistory = false } = {}) {
+      if (!href) {
+        return
+      }
+      this.loading = true
+      this.loadError = false
+      this.iframeEntrySrc = href
+      if (this.isCasaFilesEmbedded) {
+        const p = this.filesPathFromShellUrl(href)
+        this.urlInputValue = p != null ? p : href
+      } else {
+        this.urlInputValue = href
+      }
+      this.$store.dispatch('windowManager/setAppNavUrl', {
+        appId: this.app.id,
+        navUrl: href,
+      })
+      if (pushHistory) {
+        this.pushToHistory(href)
+      }
+      this.startLoadTimeout()
+      const iframe = this.$refs.iframe
+      if (iframe) {
+        iframe.src = href
+      }
+    },
+    goBack() {
+      if (!this.canGoBack) {
+        return
+      }
+      this.suppressHistoryPush = true
+      this.navIndex--
+      const url = this.navHistory[this.navIndex]
+      this.navigateToUrl(url, { pushHistory: false })
+    },
+    goForward() {
+      if (!this.canGoForward) {
+        return
+      }
+      this.suppressHistoryPush = true
+      this.navIndex++
+      const url = this.navHistory[this.navIndex]
+      this.navigateToUrl(url, { pushHistory: false })
+    },
+    onUrlSubmit() {
+      if (!this.canNavigate) {
+        this.popout()
+        return
+      }
+      const trimmed = this.urlInputValue.trim()
+      if (!trimmed) {
+        return
+      }
+      if (this.isCasaFilesEmbedded && trimmed.startsWith('/')) {
+        const filesHref = this.buildFilesEmbeddedHref(trimmed)
+        if (filesHref) {
+          this.navigateToUrl(filesHref, { pushHistory: true })
+          return
+        }
+      }
+      let href = this.normalizeNavigateUrl(trimmed)
+      if (!href) {
+        href = this.normalizeNavigateUrl(`https://${trimmed}`)
+      }
+      if (!href) {
+        this.handleUrlSearch(trimmed)
+        return
+      }
+      this.navigateToUrl(href, { pushHistory: true })
+    },
+    /** Focus address bar on active embedded window (Ctrl/Cmd+L) */
+    onEmbedHotkeys(e) {
+      if (!this.isActive) {
+        return
+      }
+      const tag = (e.target && e.target.tagName) || ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        return
+      }
+      if (!(e.ctrlKey || e.metaKey) || (e.key !== 'l' && e.key !== 'L')) {
+        return
+      }
+      if (this.urlBarMode === 'never') {
+        return
+      }
+      if (this.urlBarMode === 'auto' && !this.showUrlBarPref) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      if (!this.urlBarVisible) {
+        this.urlBarVisible = true
+        this.$store.dispatch('windowManager/setAppUrlBarVisible', {
+          appId: this.app.id,
+          urlBarVisible: true,
+        })
+      }
+      this.$nextTick(() => {
+        const el = this.$refs.urlInput
+        if (el) {
+          el.focus()
+          el.select()
+        }
+      })
+    },
     desktopEl() {
       return this.$el && this.$el.closest ? this.$el.closest('.embedded-desktop') : null
     },
@@ -142,7 +483,11 @@ export default {
       this.desktopRect = desk ? desk.getBoundingClientRect() : null
     },
     onShellMouseDown(e) {
-      if (e.target.closest('.titlebar-actions') || e.target.closest('.resize-handle')) {
+      if (
+        e.target.closest('.titlebar-actions')
+        || e.target.closest('.resize-handle')
+        || e.target.closest('.viewer-urlbar')
+      ) {
         return
       }
       this.$store.dispatch('windowManager/activateApp', this.app.id)
@@ -400,26 +745,40 @@ export default {
       this.drag = null
       this.resize = null
     },
+    hrefSameOriginAsShell(href) {
+      try {
+        return new URL(href).origin === window.location.origin
+      } catch {
+        return false
+      }
+    },
     onIframeLoad() {
       this.loading = false
       clearTimeout(this.loadTimeout)
       this.maybeSyncNavFromIframe()
+      if (this.suppressHistoryPush) {
+        this.suppressHistoryPush = false
+        this.syncUrlInputFromApp()
+        return
+      }
+      const href = this.readIframeHref()
+      if (href && this.hrefSameOriginAsShell(href) && href !== this.navHistory[this.navIndex]) {
+        this.pushToHistory(href)
+      }
+      this.syncUrlInputFromApp()
     },
     onIframeError() {
       this.loading = false
       this.loadError = true
       clearTimeout(this.loadTimeout)
+      this.suppressHistoryPush = false
     },
     reloadIframe() {
       this.loading = true
       this.loadError = false
-      this.loadTimeout = setTimeout(() => {
-        if (this.loading) {
-          this.loading = false
-          this.loadError = true
-        }
-      }, 15000)
+      this.startLoadTimeout()
       this.iframeEntrySrc = this.app.navUrl || this.app.url
+      this.syncUrlInputFromApp()
       const iframe = this.$refs.iframe
       if (iframe) {
         iframe.src = this.iframeEntrySrc
@@ -521,6 +880,15 @@ export default {
         </div>
 
         <div class="titlebar-actions" @mousedown.stop @pointerdown.stop>
+          <button
+            v-if="showTitlebarUrlToggle"
+            class="titlebar-btn"
+            :class="{ 'is-active': urlBarVisible }"
+            :title="$t('Toggle address bar')"
+            @click="toggleUrlBar"
+          >
+            <b-icon icon="link-variant" size="is-small" />
+          </button>
           <button class="titlebar-btn" :title="$t('Reload')" @click="reloadIframe">
             <b-icon icon="refresh" size="is-small" />
           </button>
@@ -548,6 +916,90 @@ export default {
             @click="close"
           >
             <b-icon icon="close" size="is-small" />
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="shouldShowUrlBar"
+        class="viewer-urlbar"
+        :class="{ 'is-cross-origin': !isSameOrigin }"
+        @mousedown.stop
+        @pointerdown.stop
+      >
+        <div class="urlbar-nav">
+          <button
+            type="button"
+            class="urlbar-btn"
+            :disabled="!canGoBack"
+            :title="$t('Back')"
+            @click="goBack"
+          >
+            <b-icon icon="chevron-left" size="is-small" />
+          </button>
+          <button
+            type="button"
+            class="urlbar-btn"
+            :disabled="!canGoForward"
+            :title="$t('Forward')"
+            @click="goForward"
+          >
+            <b-icon icon="chevron-right" size="is-small" />
+          </button>
+        </div>
+
+        <div class="urlbar-input-wrapper">
+          <b-icon
+            :icon="urlBarSecurityIcon"
+            :class="urlBarSecurityClass"
+            size="is-small"
+            class="urlbar-security-icon"
+          />
+          <input
+            ref="urlInput"
+            v-model="urlInputValue"
+            type="text"
+            class="urlbar-input"
+            :class="{ 'is-readonly': !canNavigate }"
+            :readonly="!canNavigate"
+            spellcheck="false"
+            autocomplete="off"
+            :aria-label="$t('Enter URL or search')"
+            :placeholder="$t('Enter URL or search')"
+            @focus="onUrlFocus"
+            @blur="onUrlBlur"
+            @click="onReadonlyUrlActivate"
+            @keydown.enter.prevent="onUrlSubmit"
+            @keydown.esc.prevent="onUrlCancel"
+          >
+          <button
+            v-if="urlInputFocused && canNavigate"
+            type="button"
+            class="urlbar-clear"
+            :title="$t('Close')"
+            @click.stop="clearUrlInput"
+          >
+            <b-icon icon="close-circle" size="is-small" />
+          </button>
+        </div>
+
+        <div class="urlbar-actions">
+          <button
+            type="button"
+            class="urlbar-btn"
+            :title="$t('Reload')"
+            @click="reloadIframe"
+          >
+            <b-icon icon="refresh" size="is-small" />
+          </button>
+          <button
+            v-if="!isSameOrigin && !isCasaShellEmbedded"
+            type="button"
+            class="urlbar-btn urlbar-btn-external"
+            :title="$t('Open in new tab')"
+            @click="popout"
+          >
+            <b-icon icon="open-in-new" size="is-small" />
           </button>
         </div>
       </div>
@@ -701,6 +1153,131 @@ export default {
   gap: 2px;
 }
 
+.viewer-urlbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.375rem 0.5rem;
+  min-height: 2.25rem;
+  box-sizing: border-box;
+  background: var(--shell-embed-titlebar-bg);
+  border-bottom: 1px solid var(--shell-embed-titlebar-border);
+
+  &.is-cross-origin {
+    .urlbar-input-wrapper {
+      background: rgba(255, 193, 7, 0.08);
+      border-color: rgba(255, 193, 7, 0.35);
+    }
+  }
+}
+
+.urlbar-nav {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.urlbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--shell-embed-icon);
+  transition: all 0.15s;
+
+  &:hover:not(:disabled) {
+    background: var(--shell-embed-icon-hover-bg);
+    color: var(--shell-embed-icon-hover);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.urlbar-btn-external {
+  color: var(--accent-color, #007aff);
+}
+
+.urlbar-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0 0.5rem;
+  background: var(--shell-embed-frame-bg);
+  border: 1px solid var(--shell-embed-titlebar-border);
+  border-radius: 6px;
+  min-height: 1.75rem;
+}
+
+.urlbar-security-icon {
+  flex-shrink: 0;
+
+  &.is-secure {
+    color: #22c55e;
+  }
+
+  &.is-external {
+    color: #f59e0b;
+  }
+}
+
+.urlbar-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  color: var(--shell-embed-titlebar-text);
+
+  &:focus {
+    outline: none;
+  }
+
+  &.is-readonly {
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &::placeholder {
+    color: var(--shell-muted-text, rgba(255, 255, 255, 0.45));
+  }
+}
+
+.urlbar-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--shell-muted-text, rgba(255, 255, 255, 0.45));
+
+  &:hover {
+    color: var(--shell-embed-icon-hover);
+  }
+}
+
+.urlbar-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
 .titlebar-btn {
   display: flex;
   align-items: center;
@@ -722,6 +1299,11 @@ export default {
   &.titlebar-btn-close:hover {
     background: rgba(220, 38, 38, 0.25);
     color: rgb(248, 113, 113);
+  }
+
+  &.is-active {
+    background: var(--shell-embed-icon-hover-bg);
+    color: var(--accent-color, #007aff);
   }
 }
 

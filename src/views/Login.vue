@@ -77,13 +77,21 @@ export default {
 				this.$store.commit("SET_ACCESS_TOKEN", userRes.data.data.token.access_token);
 				this.$store.commit("SET_REFRESH_TOKEN", userRes.data.data.token.refresh_token);
 
-				const versionRes = await this.$api.sys.getVersion();
-				if (versionRes.data.success == 200) {
-					localStorage.setItem("version", versionRes.data.data.current_version);
+				try {
+					const versionRes = await this.$api.sys.getVersion();
+					if (versionRes.data.success == 200) {
+						localStorage.setItem("version", versionRes.data.data.current_version);
+					}
+				} catch (e) {
+					// Main CasaOS API may be down (e.g. air build failed); gateway still serves /v1/users/* from user-service.
+					console.warn('[Login] getVersion skipped', e?.response?.status || e?.message || e)
 				}
 				this.$router.push("/");
 			} catch (err) {
-				this.message = this.$t(err.response.data.message)
+				const apiMessage = err.response?.data?.message
+				this.message = apiMessage
+					? this.$t(apiMessage)
+					: (err.message || 'Network Error')
 				this.notificationShow = true
 			}
 		}

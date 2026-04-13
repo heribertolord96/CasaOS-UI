@@ -14,9 +14,9 @@ const sys = {
 		return api.get(`${PREFIX}/state`);
 	},
 
-	// check system version
+	// check system version (use /version/check: public on gateway; /sys/version is JWT-only)
 	getVersion() {
-		return api.get(`${PREFIX}/version`);
+		return api.get(`${PREFIX}/version/check`);
 	},
 
 	// Hardware Info

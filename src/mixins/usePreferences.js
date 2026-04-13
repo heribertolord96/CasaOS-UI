@@ -39,6 +39,12 @@ export default {
     embeddedViewerMode() {
       return this.$store.getters['preferences/embeddedViewerMode']
     },
+    showUrlBar() {
+      return this.$store.getters['preferences/showUrlBar']
+    },
+    urlBarMode() {
+      return this.$store.getters['preferences/urlBarMode']
+    },
   },
 
   methods: {

@@ -69,6 +69,7 @@ function sanitizeAppForRestore(raw, index) {
   const maximized = !!raw.maximized
   const rect = normalizeRectInput(raw.rect, index)
   const zIndex = Number.isFinite(Number(raw.zIndex)) ? Math.max(100, Number(raw.zIndex)) : 100 + index
+  const urlBarVisible = raw.urlBarVisible === false ? false : true
 
   return {
     id: raw.id,
@@ -81,6 +82,7 @@ function sanitizeAppForRestore(raw, index) {
     maximized,
     rect,
     zIndex,
+    urlBarVisible,
   }
 }
 
@@ -163,6 +165,9 @@ const windowManager = {
         state.activeAppId = appInfo.id
         existing.state = 'active'
         existing.zIndex = nextZIndex(state.openApps)
+        if (existing.urlBarVisible === undefined) {
+          existing.urlBarVisible = true
+        }
         return
       }
       const idx = state.openApps.length
@@ -178,6 +183,8 @@ const windowManager = {
         ? appInfo.state
         : 'active'
 
+      const urlBarVisible = appInfo.urlBarVisible === false ? false : true
+
       state.openApps.push({
         id: appInfo.id,
         /** Logical app id for TabBar grouping (e.g. same Docker app name) */
@@ -190,6 +197,7 @@ const windowManager = {
         maximized: appInfo.maximized != null ? !!appInfo.maximized : idx === 0,
         rect: normalizeRectInput(appInfo.rect, idx),
         zIndex: z,
+        urlBarVisible,
       })
       state.activeAppId = appInfo.id
     },
@@ -271,6 +279,13 @@ const windowManager = {
         return
       app.navUrl = navUrl && navUrl !== '' ? navUrl : null
     },
+
+    SET_APP_URL_BAR_VISIBLE(state, { appId, urlBarVisible }) {
+      const app = state.openApps.find(a => a.id === appId)
+      if (app) {
+        app.urlBarVisible = !!urlBarVisible
+      }
+    },
   },
 
   actions: {
@@ -308,6 +323,10 @@ const windowManager = {
     },
     setAppNavUrl({ commit, state, rootState }, payload) {
       commit('SET_APP_NAV_URL', payload)
+      persistWorkspace(state, rootState)
+    },
+    setAppUrlBarVisible({ commit, state, rootState }, payload) {
+      commit('SET_APP_URL_BAR_VISIBLE', payload)
       persistWorkspace(state, rootState)
     },
     restoreFromStorage({ commit, rootState }) {

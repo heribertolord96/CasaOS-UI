@@ -183,8 +183,11 @@ export default {
     z-index: 10;
     // height: calc(100vh - 6rem);
     height: calc(var(--vh, 1vh) * 100 - 6rem);
-    overflow: inherit !important;
+    overflow: hidden;
     position: fixed;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
 
     @include until(480px) {
         z-index: 20;
@@ -202,15 +205,21 @@ export default {
 
 .scroll-area {
     position: relative;
-    padding: 0 16px 0 0;
-    margin-right: -16px;
-    max-height: calc(100% - 7.5rem);
-    overflow-x: inherit !important;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    padding: 0 12px 0 0;
+    margin-right: -12px;
+    box-sizing: border-box;
+    overflow-x: hidden !important;
     overflow-y: hidden !important;
 
     @include until(480px) {
-        max-height: calc(100% - 4rem);
-        height: 100% !important;
+        max-height: none;
+        min-height: 0;
+        flex: 1 1 auto;
     }
 }
 
