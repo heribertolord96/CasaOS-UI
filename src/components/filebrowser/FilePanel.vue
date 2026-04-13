@@ -104,7 +104,7 @@
 										<!--  Close Button Start -->
 										<div
 											class="is-flex is-align-items-center modal-close-container modal-close-container-line">
-											<div class="close-button" @click="$emit('close')">
+											<div class="close-button" @click="requestPanelClose">
 												<b-icon icon="close-outline" pack="casa"></b-icon>
 											</div>
 										</div>
@@ -203,13 +203,13 @@
 
 					<!-- Share Page Start -->
 					<template v-else-if="pageType == `share`">
-						<share-list-page ref="shareList" @close="$emit('close')"></share-list-page>
+						<share-list-page ref="shareList" @close="requestPanelClose"></share-list-page>
 					</template>
 					<!-- Share Page End -->
 
 					<!-- Drop Page Start -->
 					<template v-else-if="pageType == `drop`">
-						<drop-page ref="dropPage" @close="$emit('close')"></drop-page>
+						<drop-page ref="dropPage" @close="requestPanelClose"></drop-page>
 					</template>
 					<!-- Drop Page End -->
 				</template>
@@ -229,6 +229,7 @@ import dropRight from "lodash/dropRight";
 import isEqual from "lodash/isEqual";
 
 import { mixin } from "@/mixins/mixin";
+import mixinShellEmbedChild from "@/mixins/mixinShellEmbedChild";
 import VueBreakpointMixin from "vue-breakpoint-mixin";
 import events from "@/events/events";
 
@@ -267,7 +268,7 @@ import DropEntryButton from "./drop/DropEntryButton.vue";
 
 export default {
 	name: "file-panel",
-	mixins: [mixin, VueBreakpointMixin],
+	mixins: [mixin, mixinShellEmbedChild, VueBreakpointMixin],
 	provide() {
 		return {
 			filePanel: this,
@@ -317,6 +318,8 @@ export default {
 			panelType: null,
 			currentItem: null,
 			rootPath: "/DATA",
+			/** Default folder for “new file” when path is not ready (text editor entry). */
+			newFileDefaultParent: "/DATA/Documents",
 			currentPath: "",
 			currentPathName: "",
 			isViewGird: true,
@@ -444,16 +447,35 @@ export default {
 
 	mounted() {
 		this.init();
-		if (this.$route.path == "/files") {
-			this.init();
-			// this.isLoading = false;
-		}
 
 		if (this.pageType == "file") {
 			this.beforeInit();
 		}
 
 		this.isSideBarOpen = !this.isMobile;
+
+		// Embedded / routed Files: open "new file" (text editor entry) from ?newFile=1
+		if (this.$route.path === "/files" && this.$route.query.newFile === "1") {
+			const chdir =
+				typeof this.$route.query.cd === "string" && this.$route.query.cd.length > 0
+					? this.$route.query.cd
+					: this.newFileDefaultParent;
+			this.$nextTick(() => {
+				setTimeout(() => {
+					this.getFileList(chdir);
+					this.$nextTick(() => {
+						this.showNewFileModal();
+						const q = { ...this.$route.query };
+						delete q.newFile;
+						delete q.cd;
+						this.$router.replace({
+							path: "/files",
+							query: Object.keys(q).length ? q : undefined,
+						});
+					});
+				}, 400);
+			});
+		}
 
 		document.addEventListener("contextmenu", this.hideContextMenu);
 		this.$EventBus.$on(events.GOTO, (event) => {
@@ -539,13 +561,11 @@ export default {
 		 * @return {*}
 		 */
 		init(path) {
-			let initPath = path || this.rootPath;
-			if (this.isCreated) {
-				this.getFileList(initPath);
-				// this.$refs.mountedList.getStorageList();
-			} else {
+			const initPath = path || this.rootPath;
+			if (!this.isCreated) {
 				this.isCreated = true;
 			}
+			this.getFileList(initPath);
 		},
 
 		/**
@@ -855,6 +875,10 @@ export default {
 		 * @return {*}
 		 */
 		showNewFileModal() {
+			const parentPath =
+				this.currentPath && this.currentPath.length > 0
+					? this.currentPath
+					: this.newFileDefaultParent;
 			this.isModalOpen = true;
 			this.$buefy.modal.open({
 				parent: this,
@@ -866,7 +890,7 @@ export default {
 				scroll: "keep",
 				animation: "zoom-in",
 				props: {
-					currentPath: this.currentPath,
+					currentPath: parentPath,
 				},
 				events: {
 					reload: () => {

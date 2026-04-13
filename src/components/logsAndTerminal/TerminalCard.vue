@@ -42,7 +42,6 @@
 </template>
 
 <script>
-import qs from 'qs'
 import 'xterm/css/xterm.css'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
@@ -71,6 +70,8 @@ export default {
 			sshPort: 22,
 			message: "",
 			notificationShow: false,
+			// First WebSocket frame JSON for /v1/sys/wsssh (avoid secrets in URL). Null when using initWsUrl.
+			sshWsHandshake: null,
 		}
 	},
 	computed: {
@@ -113,8 +114,8 @@ export default {
 				await this.$api.sys.checkSshLogin(postData)
 				this.isConnecting = false
 				this.isVaild = true
-				postData.token = this.$store.state.access_token
-				this.wsUrl = `${this.$wsProtocol}//${this.$baseURL}/v1/sys/wsssh?${qs.stringify(postData)}`
+				this.sshWsHandshake = { ...postData }
+				this.wsUrl = `${this.$wsProtocol}//${this.$baseURL}/v1/sys/wsssh?cols=${encodeURIComponent(this.cols)}&rows=${encodeURIComponent(this.rows)}`
 				this.initSocket();
 			} catch (error) {
 				this.notificationShow = true
@@ -171,6 +172,9 @@ export default {
 		},
 		socketOnOpen() {
 			this.socket.onopen = () => {
+				if (this.sshWsHandshake) {
+					this.socket.send(JSON.stringify(this.sshWsHandshake))
+				}
 				this.initTerm()
 			}
 		},

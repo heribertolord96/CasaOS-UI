@@ -9,6 +9,7 @@ import business_OpenThirdApp from '@/mixins/app/Business_OpenThirdApp'
 import business_LinkApp from '@/mixins/app/Business_LinkApp'
 import tipEditorModal from '@/components/Apps/TipEditorModal.vue'
 import commonI18n, { ice_i18n } from '@/mixins/base/common-i18n'
+import { nanoid } from 'nanoid'
 
 export default {
   name: 'AppCard',
@@ -16,7 +17,6 @@ export default {
     CTooltip: cTooltip,
   },
   mixins: [business_ShowNewAppTag, business_OpenThirdApp, business_LinkApp, commonI18n],
-  inject: ['homeShowFiles', 'openAppStore'],
   props: {
     item: {
       type: Object,
@@ -159,7 +159,8 @@ export default {
         const openMode = this.$store.getters['preferences/openMode']
         if (openMode === 'embedded') {
           this.$store.dispatch('windowManager/openApp', {
-            id: item.name,
+            id: `embed-link-${item.name}-${nanoid(10)}`,
+            groupKey: item.name,
             name: item.name,
             icon: item.icon || '',
             url: item.hostname,
@@ -185,10 +186,10 @@ export default {
     openSystemApps(item) {
       switch (item.name) {
         case 'App Store':
-          this.openAppStore()
+          this.$EventBus.$emit('casaUI:openAppStore')
           break
         case 'Files':
-          this.homeShowFiles()
+          this.$EventBus.$emit('casaUI:openFiles')
           break
         default:
           break

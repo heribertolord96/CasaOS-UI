@@ -105,6 +105,7 @@ import events from '@/events/events'
 import last from 'lodash/last'
 import business_ShowNewAppTag from '@/mixins/app/Business_ShowNewAppTag'
 import business_LinkApp from '@/mixins/app/Business_LinkApp'
+import business_OpenThirdApp from '@/mixins/app/Business_OpenThirdApp'
 import usePreferences from '@/mixins/usePreferences'
 import isEqual from 'lodash/isEqual'
 import { ice_i18n } from '@/mixins/base/common-i18n'
@@ -139,7 +140,7 @@ const builtInApplications = [
 const orderConfig = 'app_order'
 
 export default {
-	mixins: [business_ShowNewAppTag, business_LinkApp, usePreferences],
+	mixins: [business_ShowNewAppTag, business_LinkApp, business_OpenThirdApp, usePreferences],
 	data () {
 		return {
 			user_id: localStorage.getItem('user_id'),
@@ -166,7 +167,7 @@ export default {
 	},
 	provide () {
 		return {
-			openAppStore: this.showInstall
+			openAppStore: this.openAppStoreForUser,
 		}
 	},
 	computed: {
@@ -196,9 +197,7 @@ export default {
 			this.getList()
 		})
 
-		this.$EventBus.$on('casaUI:openAppStore', () => {
-			this.showInstall(0)
-		})
+		this.$EventBus.$on('casaUI:openAppStore', this.openAppStoreForUser)
 
 		this.ListRefreshTimer = setInterval(() => {
 			this.getList()
@@ -206,7 +205,7 @@ export default {
 	},
 	beforeDestroy () {
 		this.$EventBus.$off(events.OPEN_APP_STORE_AND_GOTO_SYNCTHING)
-		this.$EventBus.$off('casaUI:openAppStore')
+		this.$EventBus.$off('casaUI:openAppStore', this.openAppStoreForUser)
 		window.removeEventListener('resize', this.getSkCount)
 
 		clearInterval(this.ListRefreshTimer)
@@ -216,6 +215,14 @@ export default {
 		this.getSkCount()
 	},
 	methods: {
+		openAppStoreForUser () {
+			if (this.$store.getters['preferences/openMode'] === 'embedded') {
+				this.openCasaAppStoreEmbedded()
+			} else {
+				this.showInstall(0)
+			}
+		},
+
 		isMobile () {
 			const userAgent = navigator.userAgent
 			const mobileRegex =

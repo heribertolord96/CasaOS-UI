@@ -26,11 +26,7 @@ export default {
 	components: {},
 	computed: {
 		rssShow() {
-			let which = this.$store.state.rssSwitch
-			if (which) {
-				this.parseFeed()
-			}
-			return which
+			return this.$store.state.rssSwitch
 		},
 		line() {
 			return this.rss.length
@@ -38,38 +34,56 @@ export default {
 		perc() {
 			return -(this.line - 1) / this.line * 100 + '%'
 		},
-		isShow() {
-			return this.$route.path !== '/login' || this.$route.path !== '/welcome'
-		},
 	},
 	watch: {
-		isShow(val) {
-			val && this.parseFeed()
-		}
+		rssShow: {
+			immediate: true,
+			handler(enabled) {
+				if (enabled) {
+					this.parseFeed()
+				} else {
+					this.rss = []
+				}
+			},
+		},
 	},
 	data() {
 		return {
 			rss: [],
-		};
+			feedRequestPending: false,
+		}
 	},
 	methods: {
-		async parseFeed() {			
-			let params = await this.$api.file.getContent('/var/lib/casaos/baseinfo.conf').then(res => {
-				return JSON.parse(res.data.data)
-			})
-			this.$store.commit('SET_DEVICE_ID', params.i)
-			params.l = localStorage.getItem('lang') ? localStorage.getItem('lang') : navigator.language.toLowerCase().replace("-", "_");
-			let stringify = btoa(encodeURIComponent(JSON.stringify(params)))
-			let feed = await parse('https://blog-casaos.zimaspace.com/feed/tag/dashboard/?key=' + stringify)
-			const newFeed = feed.items.map(item => {
-				return {
+		async parseFeed() {
+			if (!this.$store.state.rssSwitch || this.feedRequestPending) {
+				return
+			}
+			this.feedRequestPending = true
+			try {
+				const res = await this.$api.file.getContent('/var/lib/casaos/baseinfo.conf')
+				const params = JSON.parse(res.data.data)
+				this.$store.commit('SET_DEVICE_ID', params.i)
+				params.l = localStorage.getItem('lang')
+					? localStorage.getItem('lang')
+					: navigator.language.toLowerCase().replace('-', '_')
+				const stringify = btoa(encodeURIComponent(JSON.stringify(params)))
+				const feed = await parse(
+					`https://blog-casaos.zimaspace.com/feed/tag/dashboard/?key=${stringify}`,
+				)
+				const items = feed.items || []
+				this.rss = items.map(item => ({
 					title: item.title,
-					link: DOMPurify.sanitize(item.link, { ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.1-9]+(?:[^a-z+.1-9]|$))/i })
-				}
-			})
-			this.rss = newFeed
-			
-			
+					link: DOMPurify.sanitize(item.link, {
+						ALLOWED_URI_REGEXP:
+							/^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.1-9]+(?:[^a-z+.1-9]|$))/i,
+					}),
+				}))
+			} catch (e) {
+				console.warn('BrandBar: RSS feed unavailable', e)
+				this.rss = []
+			} finally {
+				this.feedRequestPending = false
+			}
 		},
 
 		gotoLink(link) {

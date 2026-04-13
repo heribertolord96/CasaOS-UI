@@ -20,7 +20,7 @@
 		</template>
 
 		<!-- Router View Start -->
-		<router-view/>
+		<router-view class="app-router-view" />
 		<!-- Router View End -->
 
 	</div>
@@ -32,6 +32,7 @@ import ContactBar    from './components/ContactBar.vue'
 import CasaWallpaper from './components/wallpaper/CasaWallpaper.vue'
 import {mixin}       from './mixins/mixin';
 import usePreferences from './mixins/usePreferences';
+import { SHELL_EMBED_MSG_TYPE } from '@/utils/shellEmbedBridge'
 
 const customIconConfig = {
 	customIconPacks: {
@@ -68,7 +69,7 @@ export default {
 	components: {
 		BrandBar,
 		ContactBar,
-		CasaWallpaper
+		CasaWallpaper,
 	},
 	mixins: [mixin, usePreferences],
 	data() {
@@ -118,8 +119,23 @@ export default {
 			},
 			immediate: true,
 		},
+		uiTheme: {
+			handler(val) {
+				document.documentElement.setAttribute('data-ui-theme', val === 'light' ? 'light' : 'dark')
+			},
+			immediate: true,
+		},
+		shellOpacity: {
+			handler(val) {
+				const n = Number(val)
+				const pct = Number.isFinite(n) ? n : 100
+				const clamped = Math.min(100, Math.max(15, pct))
+				const mul = clamped / 100
+				document.documentElement.style.setProperty('--shell-opacity-mul', String(mul))
+			},
+			immediate: true,
+		},
 	},
-
 	created() {
 		console.log(`%c
 _____             _____ _____
@@ -134,11 +150,35 @@ _____             _____ _____
 	mounted() {
 		this.setInitLang();
 		window.addEventListener('resize', this.onWindowResize);
+		window.addEventListener('message', this.onShellEmbedMessage);
 		this.onWindowResize();
 		let vh = window.innerHeight * 0.01;
 		this["vh"] = `${vh}px`;
 	},
+	beforeDestroy() {
+		window.removeEventListener('resize', this.onWindowResize);
+		window.removeEventListener('message', this.onShellEmbedMessage);
+	},
 	methods: {
+		/** Iframe route views (Files, App Store) notify parent to close EmbeddedViewer window. */
+		onShellEmbedMessage(event) {
+			if (event.origin !== window.location.origin) {
+				return
+			}
+			const d = event.data
+			if (!d || d.type !== SHELL_EMBED_MSG_TYPE || d.action !== 'close') {
+				return
+			}
+			const embedId = d.embedId
+			if (typeof embedId !== 'string' || embedId.length > 256) {
+				return
+			}
+			const open = this.$store.getters['windowManager/openApps']
+			if (!open.some(a => a.id === embedId)) {
+				return
+			}
+			this.$store.dispatch('windowManager/closeApp', embedId)
+		},
 		/**
 		 * @description: Get and Set default language
 		 * @return {*} void
@@ -184,7 +224,19 @@ _____             _____ _____
 	& .base-bar {
 		position: fixed;
 		bottom: 0;
-		z-index: 10;
+		left: 0;
+		right: 0;
+		/* Below embedded workspace (Home) so the shell can cover full height; bar stays visible where content is transparent */
+		z-index: 6;
+		pointer-events: auto;
+	}
+
+	.app-router-view {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 	}
 }
 

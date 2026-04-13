@@ -19,6 +19,7 @@ import AppDetailInfo from '@/components/Apps/AppDetailInfo.vue'
 import ComposeConfig from '@/components/Apps/ComposeConfig.vue'
 import business_OpenThirdApp from '@/mixins/app/Business_OpenThirdApp'
 import business_ShowNewAppTag from '@/mixins/app/Business_ShowNewAppTag'
+import mixinShellEmbedChild from '@/mixins/mixinShellEmbedChild'
 import AppsInstallationLocation from '@/components/Apps/AppsInstallationLocation'
 
 const data = [
@@ -67,7 +68,7 @@ export default {
   directives: {
     OnClickOutside: vOnClickOutside,
   },
-  mixins: [business_ShowNewAppTag, business_OpenThirdApp],
+  mixins: [business_ShowNewAppTag, business_OpenThirdApp, mixinShellEmbedChild],
   props: {
     id: String,
     state: String,
@@ -282,6 +283,10 @@ export default {
     isMobile() {
       return this.$store.state.isMobile
     },
+    /** Shown inside embedded iframe from Home (not modal overlay) */
+    isEmbeddedShell() {
+      return this.$route.name === 'DevelopmentElement'
+    },
   },
   watch: {
     // Watch if Section index changes
@@ -395,6 +400,10 @@ export default {
     this.searchAndSourcesStatusController()
   },
   methods: {
+    closeFirstInstallHeader() {
+      this.$messageBus('appstore_close')
+      this.requestPanelClose()
+    },
     resetSearchAndSourcesStatus() {
       switch (this.isMobile) {
         case true:
@@ -797,7 +806,7 @@ export default {
                   type: 'is-warning',
                 })
               }
-              this.$emit('close')
+              this.requestPanelClose()
             })
             .catch((err) => {
               if (err.response.status === 400) {
@@ -839,7 +848,7 @@ export default {
                   type: 'is-warning',
                 })
               }
-              this.$emit('close')
+              this.requestPanelClose()
             })
             .catch((err) => {
               this.isLoading = false
@@ -1118,7 +1127,7 @@ export default {
 
         setTimeout(() => {
           this.$emit('updateState')
-          this.$emit('close')
+          this.requestPanelClose()
         }, 500)
       }
     },
@@ -1189,8 +1198,13 @@ export default {
 
 <template>
   <div
-    :class="{ 'narrow': currentSlide > 0, 'card-width': isFirstInstall, '_stepStoreList': currentSlide === 0 }"
-    class="modal-card"
+    :class="{
+      narrow: currentSlide > 0,
+      'card-width': isFirstInstall,
+      _stepStoreList: currentSlide === 0,
+      'is-embedded-shell': isEmbeddedShell,
+    }"
+    class="modal-card app-panel"
   >
     <!--    first setting！！ apps installation location -->
     <template v-if="isFirstInstall">
@@ -1204,10 +1218,7 @@ export default {
           class="close-button"
           icon="close-outline"
           pack="casa"
-          @click.native="
-            $emit('close')
-            $messageBus('appstore_close')
-          "
+          @click.native="closeFirstInstallHeader"
         />
       </header>
       <p class="modal-card-body">
@@ -1291,10 +1302,10 @@ export default {
             v-if="currentSlide < 2"
             class="is-flex is-align-items-center modal-close-container modal-close-container-line"
           >
-            <b-icon class="close-button" icon="close-outline" pack="casa" @click.native="$emit('close')" />
+            <b-icon class="close-button" icon="close-outline" pack="casa" @click.native="requestPanelClose" />
           </div>
           <div v-else-if="currentSlide === 2" class="is-flex is-align-items-center">
-            <b-icon class="close-button" icon="close-outline" pack="casa" @click.native="$emit('close')" />
+            <b-icon class="close-button" icon="close-outline" pack="casa" @click.native="requestPanelClose" />
           </div>
         </div>
       </header>
@@ -1826,7 +1837,7 @@ export default {
             :label="$t(cancelButtonText)"
             rounded
             type="is-primary"
-            @click="$emit('close')"
+            @click="requestPanelClose"
           />
           <b-button
             v-if="isFirstInstall"
@@ -1850,12 +1861,33 @@ export default {
         background-color: hsla(208, 16%, 94%, 1);
     }
 
-    ._stepStoreList {
+    &._stepStoreList {
         min-height: calc(100vh - 2.5rem);
 
         .modal-card-body {
             overflow-y: scroll;
             overflow-x: clip;
+        }
+    }
+
+    &.is-embedded-shell {
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 100vh !important;
+        height: 100vh !important;
+        max-height: none !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+
+        &._stepStoreList {
+            min-height: 100vh !important;
+        }
+
+        .modal-card-body {
+            flex: 1 1 auto;
+            min-height: 0;
         }
     }
 }

@@ -1,8 +1,8 @@
 module.exports = {
 	presets: [
-		"@vue/cli-plugin-babel/preset",
+		// useBuiltIns/corejs live here — @vue/cli-plugin-babel already bundles @babel/preset-env
 		[
-			"@babel/preset-env",
+			"@vue/cli-plugin-babel/preset",
 			{
 				useBuiltIns: "entry",
 				corejs: 3,

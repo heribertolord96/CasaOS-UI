@@ -107,6 +107,10 @@ instance.interceptors.response.use(
 				})
 			})
 		}
+		const st = error?.response?.status
+		if (st === 404 || (st >= 500 && st < 600)) {
+			console.warn('[API]', st, error.config?.url || '', error.message)
+		}
 		return Promise.reject(error)
 
 	}

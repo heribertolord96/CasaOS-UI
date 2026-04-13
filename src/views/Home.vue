@@ -11,6 +11,7 @@ import SettingsPanel from '@/components/shell/SettingsPanel.vue'
 import UpdateCompleteModal from '@/components/settings/UpdateCompleteModal.vue'
 import { mixin } from '@/mixins/mixin'
 import usePreferences from '@/mixins/usePreferences'
+import business_OpenThirdApp from '@/mixins/app/Business_OpenThirdApp'
 import events from '@/events/events'
 
 const wallpaperConfig = 'wallpaper'
@@ -27,7 +28,7 @@ export default {
     EmbeddedViewer,
     SettingsPanel,
   },
-  mixins: [mixin, usePreferences],
+  mixins: [mixin, usePreferences, business_OpenThirdApp],
   provide() {
     return {
       homeShowFiles: this.showFiles,
@@ -103,11 +104,13 @@ export default {
     this.$EventBus.$on('casaUI:openSettingsPanel', () => {
       this.isSettingsPanelOpen = true
     })
+    this.$EventBus.$on('casaUI:openFiles', this.handleOpenFilesBus)
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.onResize)
     this.$EventBus.$off('casaUI:openStorageManager')
     this.$EventBus.$off('casaUI:openSettingsPanel')
+    this.$EventBus.$off('casaUI:openFiles', this.handleOpenFilesBus)
   },
   methods: {
 
@@ -163,6 +166,14 @@ export default {
       this.$nextTick(() => {
         this.$refs.filePanel.init(path)
       })
+    },
+
+    handleOpenFilesBus() {
+      if (this.$store.getters['preferences/openMode'] === 'embedded') {
+        this.openCasaFilesEmbedded()
+      } else {
+        this.showFiles()
+      }
     },
 
     afterFileEnter() {

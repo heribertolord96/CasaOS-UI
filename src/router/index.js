@@ -65,29 +65,25 @@ router.beforeEach(async (to, from, next) => {
 			if (requireAuth && !accessToken) {
 				next('/login');
 			} else {
-				switch (to.path) {
-					case "/login":
-						if (accessToken) {
-							next('/');
-						}
-						break;
-
-					case "/logout":
-						localStorage.removeItem("access_token");
-						localStorage.removeItem("refresh_token");
-						localStorage.removeItem("wallpaper");
-						localStorage.removeItem("user");
-						next('/login');
-						break;
-
-					default:
-						if (version == null) {
-							localStorage.removeItem("access_token");
-							next('/login');
-						}
-						break;
+				// Call next() exactly once (Vue Router 3); avoid a second next() after switch.
+				if (to.path === '/logout') {
+					localStorage.removeItem("access_token");
+					localStorage.removeItem("refresh_token");
+					localStorage.removeItem("wallpaper");
+					localStorage.removeItem("user");
+					next('/login');
+				} else if (to.path === '/login') {
+					if (accessToken) {
+						next('/');
+					} else {
+						next();
+					}
+				} else if (version == null) {
+					localStorage.removeItem("access_token");
+					next('/login');
+				} else {
+					next();
 				}
-				next();
 			}
 		}
 	} else {

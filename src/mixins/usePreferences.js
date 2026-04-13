@@ -27,6 +27,18 @@ export default {
     appMenuDisplay() {
       return this.$store.getters['preferences/appMenuDisplay']
     },
+    uiTheme() {
+      return this.$store.getters['preferences/uiTheme']
+    },
+    shellOpacity() {
+      return this.$store.getters['preferences/shellOpacity']
+    },
+    rememberWorkspace() {
+      return this.$store.getters['preferences/rememberWorkspace']
+    },
+    embeddedViewerMode() {
+      return this.$store.getters['preferences/embeddedViewerMode']
+    },
   },
 
   methods: {

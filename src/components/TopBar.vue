@@ -1,5 +1,4 @@
 <script>
-import AccountPanel from './account/AccountPanel.vue'
 import TerminalPanel from './logsAndTerminal/TerminalPanel.vue'
 import PortPanel from './settings/PortPanel.vue'
 import UpdateModal from './settings/UpdateModal.vue'
@@ -16,7 +15,6 @@ const systemConfigName = 'system'
 export default {
   name: 'TopBar',
   components: {
-    AccountPanel,
     TabBar,
     AppMenuDropdown,
   },
@@ -74,6 +72,8 @@ export default {
       showPowerTitle: '',
       showPowerMessage: '',
       isFullscreen: false,
+      /** Full settings UI (formerly top-bar dropdown); opened from App menu */
+      settingsModalOpen: false,
     }
   },
   computed: {
@@ -152,9 +152,13 @@ export default {
     this.getUsbStatus()
     this.getHardwareInfo()
     document.addEventListener('fullscreenchange', this.onFullscreenChange)
+    this.$EventBus.$on('casaUI:openTopBarSettings', this.openTopBarSettingsFromMenu)
+    this.$EventBus.$on('casaUI:requestTerminalFromMenu', this.showTerminalPanel)
   },
   beforeDestroy() {
     document.removeEventListener('fullscreenchange', this.onFullscreenChange)
+    this.$EventBus.$off('casaUI:openTopBarSettings', this.openTopBarSettingsFromMenu)
+    this.$EventBus.$off('casaUI:requestTerminalFromMenu', this.showTerminalPanel)
   },
 
   methods: {
@@ -178,17 +182,21 @@ export default {
      * @param {boolean} isOpen
      * @return {*}
      */
-    onOpen(isOpen) {
+    onSettingsModalInput(isOpen) {
       if (isOpen) {
         this.$store.commit('SET_SIDEBAR_CLOSE')
         this.checkVersion()
       }
       else {
-        // Reset the text when the Settings layer closes
-        // this.resetPower(true)
         this.restart = 'Restart'
         this.shutdown = 'Shutdown'
       }
+    },
+
+    openTopBarSettingsFromMenu() {
+      this.settingsModalOpen = true
+      this.$store.commit('SET_SIDEBAR_CLOSE')
+      this.checkVersion()
     },
 
     /**
@@ -236,7 +244,7 @@ export default {
      * @return {*}
      */
     showPortPanel() {
-      this.$refs.settingsDrop.toggle()
+      this.settingsModalOpen = false
       this.$buefy.modal.open({
         parent: this,
         component: PortPanel,
@@ -253,7 +261,7 @@ export default {
     },
     showChangeWallpaperModal() {
       this.$EventBus.$emit(events.SHOW_CHANGE_WALLPAPER_MODAL)
-      this.$refs.settingsDrop.toggle()
+      this.settingsModalOpen = false
     },
 
     /*************************************************
@@ -421,7 +429,7 @@ export default {
         this[key.toLowerCase()] = 'Are you sure?'
         return
       }
-      this.$refs.settingsDrop.toggle()
+      this.settingsModalOpen = false
       this.showPower = true
       switch (key) {
         case 'Restart':
@@ -496,33 +504,18 @@ export default {
       </div>
 
       <!-- App Menu Dropdown -->
-      <AppMenuDropdown />
-
-      <!-- Account Dropmenu -->
-      <b-dropdown
-        animation="fade1"
-        aria-role="list"
-        class="navbar-item"
-        :close-on-click="true"
-        @active-change="getUserInfo"
-      >
-        <template #trigger>
-          <b-tooltip
-            :active="!$store.state.isMobile"
-            :label="$t('Account')"
-            position="is-bottom"
-            type="is-dark"
-            @click.native="$messageBus('account_setting')"
-          >
-            <p role="button">
-              <b-icon class="picon" icon="account-outline" pack="casa" size="is-20" />
-            </p>
-          </b-tooltip>
-        </template>
-        <b-dropdown-item :focusable="false" aria-role="menu-item" class="p-0" custom>
-          <AccountPanel />
-        </b-dropdown-item>
-      </b-dropdown>
+      <AppMenuDropdown
+        :bar-data="barData"
+        :languages="languages"
+        :search-engines="searchEngines"
+        :rss-switch="rss_switch"
+        :restart-text="restart"
+        :shutdown-text="shutdown"
+        :update-available="updateInfo.need_update"
+        @dashboard-save="saveData"
+        @update:rssSwitch="rss_switch = $event"
+        @rss-input="rssConfirm"
+      />
     </div>
 
     <!-- CENTER SECTION: TabBar -->
@@ -530,20 +523,8 @@ export default {
       <TabBar />
     </div>
 
-    <!-- RIGHT SECTION: Terminal + Fullscreen + Settings -->
+    <!-- RIGHT SECTION: Fullscreen (terminal / settings / account live in App menu) -->
     <div class="topbar-right">
-      <!-- Terminal -->
-      <div class="navbar-item" @click="showTerminalPanel">
-        <b-tooltip
-          :active="!$store.state.isMobile"
-          :label="$t('Terminal & Logs')"
-          position="is-bottom"
-          type="is-dark"
-        >
-          <b-icon class="picon" icon="terminal-outline" pack="casa" size="is-20" />
-        </b-tooltip>
-      </div>
-
       <!-- Fullscreen Toggle -->
       <div class="navbar-item" @click="toggleFullscreen">
         <b-tooltip
@@ -559,41 +540,31 @@ export default {
           />
         </b-tooltip>
       </div>
+    </div>
 
-      <!-- Settings Dropmenu -->
-      <b-dropdown
-        ref="settingsDrop"
-        animation="fade1"
-        aria-role="list"
-        class="navbar-item"
-        position="is-bottom-left"
-        @active-change="onOpen"
-      >
-        <template #trigger>
-          <b-tooltip
-            :active="!$store.state.isMobile"
-            :label="$t('Settings')"
-            position="is-bottom"
-            type="is-dark"
-            @click.native="$messageBus('dashboardsetting')"
-          >
-            <p role="button">
-              <b-icon
-                :class="{ 'update-icon-dot': updateInfo.need_update }"
-                class="picon"
-                icon="control-outline"
-                pack="casa"
-                size="is-20"
-              />
-            </p>
-          </b-tooltip>
-        </template>
-
-        <b-dropdown-item :focusable="false" aria-role="menu-item" class="p-0" custom>
-          <h2 class="_title mb-4 has-text-weight-bold">
-            {{ $t("Settings") }}
-          </h2>
-
+    <!-- Full settings (opened from App menu → Settings) -->
+    <b-modal
+      v-model="settingsModalOpen"
+      :can-cancel="['escape', 'outside']"
+      scroll="keep"
+      animation="zoom-in"
+      aria-modal
+      @input="onSettingsModalInput"
+    >
+      <div class="modal-card topbar-settings-modal-card" style="width: min(36rem, 96vw)">
+        <header class="modal-card-head">
+          <p class="modal-card-title is-flex is-align-items-center">
+            {{ $t('Settings') }}
+            <span v-if="updateInfo.need_update" class="update-icon-dot ml-2" aria-hidden="true" />
+          </p>
+          <button
+            type="button"
+            class="delete"
+            :aria-label="$t('Close')"
+            @click="settingsModalOpen = false"
+          />
+        </header>
+        <section class="modal-card-body" style="max-height: min(85vh, 42rem); overflow-y: auto; padding-top: 0.5rem;">
           <!-- Open Mode Toggle -->
           <div
             class="is-flex is-align-items-center mb-1 _is-large _box hover-effect _is-radius pr-2 mr-4 ml-4"
@@ -865,9 +836,9 @@ export default {
               {{ $t(shutdown) }}
             </div>
           </div>
-        </b-dropdown-item>
-      </b-dropdown>
-    </div>
+        </section>
+      </div>
+    </b-modal>
 
     <!-- Power Modal -->
     <b-modal v-model="showPower" :can-cancel="false" class="_modal" scroll="clip" width="20rem">
@@ -958,8 +929,8 @@ export default {
 	position: relative;
 	z-index: 20;
 	height: 2.75rem;
-	background-color: $backDropColor;
-	backdrop-filter: $backDropBlur;
+	background-color: var(--shell-topbar-bg);
+	backdrop-filter: var(--shell-topbar-blur);
 	display: flex;
 	justify-content: space-between;
 
@@ -1020,17 +991,17 @@ export default {
 		min-width: 22.5rem;
 
 		.dropdown-content {
-			background-color: $backDropColor;
-			backdrop-filter: $backDropBlur;
+			background-color: var(--shell-dropdown-bg);
+			backdrop-filter: var(--shell-dropdown-blur);
 			border-radius: $backDropBorderRadius;
-			box-shadow: $backDropShadow;
+			box-shadow: var(--shell-dropdown-shadow);
 			border: $backDropBorder;
-			color: #fff;
+			color: var(--shell-dropdown-text);
 
 			.dropdown-item {
 				padding: 0.875rem 1.25rem;
 				text-align: left;
-				color: #fff;
+				color: var(--shell-dropdown-text);
 
 				.item {
 					height: 2rem;
@@ -1101,17 +1072,20 @@ export default {
 	}
 
 	.icon {
-		color: rgba(255, 255, 255, 0.9);
+		color: var(--shell-topbar-icon);
 	}
 
 	.dropdown-content .icon,
-	.dropdown-content ._is-normal,
+	.dropdown-content ._is-normal {
+		color: var(--shell-dropdown-text);
+	}
+
 	.dropdown-content ._has-text-gray {
-		color: rgba(255, 255, 255, 0.85);
+		color: var(--shell-gray-text);
 	}
 
 	.dropdown-content .hover-effect:hover {
-		background: rgba(255, 255, 255, 0.1);
+		background: var(--shell-hover);
 	}
 
 	.dropdown-content .hover-effect-attention:hover {
@@ -1120,28 +1094,28 @@ export default {
 
 	.dropdown-content .set-select {
 		.select::after {
-			border-color: rgba(255, 255, 255, 0.7) !important;
+			border-color: var(--shell-select-arrow) !important;
 		}
 
 		select {
 			background-color: transparent !important;
-			border-color: rgba(255, 255, 255, 0.3) !important;
-			color: #fff !important;
+			border-color: var(--shell-select-border) !important;
+			color: var(--shell-select-fg) !important;
 
 			option {
-				background: #35363a;
-				color: #fff;
+				background: var(--shell-select-option-bg);
+				color: var(--shell-select-option-fg);
 			}
 		}
 	}
 
 	.dropdown-content .switch input[type="checkbox"] + .check {
-		background: rgba(255, 255, 255, 0.2);
-		border-color: rgba(255, 255, 255, 0.3);
+		background: var(--shell-switch-track);
+		border-color: var(--shell-switch-border);
 	}
 
 	.dropdown-content ._footer {
-		border-top-color: rgba(255, 255, 255, 0.12);
+		border-top-color: var(--shell-divider);
 	}
 }
 

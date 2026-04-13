@@ -1,9 +1,48 @@
-const webpack = require("webpack");
+const fs = require("fs");
 const path = require("path");
-const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
-const dotenv = require("dotenv");
+const { createRequire } = require("module");
+
+/**
+ * pnpm does not hoist devDependencies to node_modules/<name> by default, but
+ * vue.config.js is loaded with require() from the project root. Resolve webpack
+ * plugins the same way Node would if they were hoisted.
+ */
+function requireDep(name) {
+	try {
+		return require(name);
+	} catch (err) {
+		if (err.code !== "MODULE_NOT_FOUND") {
+			throw err;
+		}
+	}
+	const reqFromCli = createRequire(require.resolve("@vue/cli-service/package.json"));
+	try {
+		return reqFromCli(name);
+	} catch {
+		const pnpmDir = path.join(__dirname, "node_modules", ".pnpm");
+		if (!fs.existsSync(pnpmDir)) {
+			throw new Error(`Cannot resolve "${name}": run pnpm install in CasaOS-UI`);
+		}
+		const dirents = fs.readdirSync(pnpmDir, { withFileTypes: true });
+		const match = dirents.find((d) => d.isDirectory() && d.name.startsWith(`${name}@`));
+		if (!match) {
+			throw new Error(`Cannot resolve "${name}" under node_modules/.pnpm`);
+		}
+		return require(path.join(pnpmDir, match.name, "node_modules", name));
+	}
+}
+
+const webpack = requireDep("webpack");
+const NodePolyfillPlugin = requireDep("node-polyfill-webpack-plugin");
 const isProd = process.env.NODE_ENV === "prod";
-const TerserPlugin = require("terser-webpack-plugin");
+
+// Ensure .env.dev is applied when resolving the dev proxy (avoids http://undefined:undefined).
+try {
+	requireDep("dotenv").config({ path: path.join(__dirname, ".env.dev") });
+} catch (_) {
+	/* optional */
+}
+const casaosDevTarget = `http://${process.env.VUE_APP_DEV_IP || "localhost"}:${process.env.VUE_APP_DEV_PORT || "4080"}`;
 
 module.exports = {
 	publicPath: "/",
@@ -44,7 +83,7 @@ module.exports = {
 			})
 		);
 
-		config.plugin("define").use(require("webpack/lib/DefinePlugin"), [
+		config.plugin("define").use(webpack.DefinePlugin, [
 			{
 				"process.env": JSON.stringify(process.env),
 				BUILT_TIME: JSON.stringify(Date()),
@@ -55,6 +94,7 @@ module.exports = {
 
 		// Production only
 		if (isProd) {
+			const CssMinimizerPlugin = requireDep("css-minimizer-webpack-plugin");
 			config.output.filename("[name].[contenthash:8].js").end();
 			config.output.chunkFilename("[name].[contenthash:8].js").end();
 			config.optimization.minimize(true);
@@ -64,7 +104,7 @@ module.exports = {
 
 			config.optimization
 				.minimizer("css")
-				.use(require("css-minimizer-webpack-plugin"), [
+				.use(CssMinimizerPlugin, [
 					{ minimizerOptions: { preset: ["default", { discardComments: { removeAll: true } }] } },
 				]);
 		}
@@ -77,15 +117,27 @@ module.exports = {
 		allowedHosts: 'all',
 		client: {
 			webSocketURL: 'auto://0.0.0.0:0/ws',
+			// Do not full-screen overlay for expected API failures (backend down, missing routes) during dev
+			overlay: {
+				runtimeErrors: (error) => {
+					if (!error) return true;
+					const msg = error.message || String(error);
+					if (msg.includes("Network Error")) return false;
+					if (/Request failed with status code (404|5\d\d)\b/.test(msg)) return false;
+					return true;
+				},
+			},
 		},
 		proxy: {
 			"/v1": {
-				target: `http://${process.env.VUE_APP_DEV_IP}:${process.env.VUE_APP_DEV_PORT}`,
+				target: casaosDevTarget,
 				changeOrigin: true,
+				ws: false,
 			},
 			"/v2": {
-				target: `http://${process.env.VUE_APP_DEV_IP}:${process.env.VUE_APP_DEV_PORT}`,
+				target: casaosDevTarget,
 				changeOrigin: true,
+				ws: true,
 			},
 		},
 	},

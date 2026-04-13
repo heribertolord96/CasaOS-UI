@@ -17,6 +17,26 @@ export default {
     iconOnlyTabs() {
       return this.tabBarDisplay === 'iconTooltip'
     },
+    /** One tab per logical app; multiple instances show a count badge */
+    tabBarGroups() {
+      const byKey = new Map()
+      for (const app of this.openApps) {
+        const key = app.groupKey != null ? app.groupKey : app.name
+        if (!byKey.has(key)) {
+          byKey.set(key, [])
+        }
+        byKey.get(key).push(app)
+      }
+      return Array.from(byKey.entries()).map(([groupKey, apps]) => ({
+        groupKey,
+        apps,
+        count: apps.length,
+        label: apps[0].name,
+        icon: apps[0].icon,
+        active: apps.some(a => a.id === this.activeAppId),
+        minimized: apps.every(a => a.state === 'minimized'),
+      }))
+    },
   },
   methods: {
     activateDashboard() {
@@ -28,6 +48,31 @@ export default {
     closeApp(appId) {
       this.$store.dispatch('windowManager/closeApp', appId)
     },
+    /** Cycle instances when clicking the same grouped tab */
+    activateGroup(grp) {
+      const aid = this.activeAppId
+      const inGroup = grp.apps.find(a => a.id === aid)
+      if (grp.apps.length > 1 && inGroup) {
+        const idx = grp.apps.findIndex(a => a.id === aid)
+        const next = grp.apps[(idx + 1) % grp.apps.length]
+        this.activateApp(next.id)
+        return
+      }
+      const front = grp.apps.reduce((a, b) => (a.zIndex >= b.zIndex ? a : b))
+      this.activateApp(front.id)
+    },
+    closeGroup(grp) {
+      const aid = this.activeAppId
+      const activeInGroup = grp.apps.find(a => a.id === aid)
+      const target = activeInGroup || grp.apps.reduce((a, b) => (a.zIndex >= b.zIndex ? a : b))
+      this.closeApp(target.id)
+    },
+    tooltipForGroup(grp) {
+      if (grp.count <= 1) {
+        return grp.label
+      }
+      return `${grp.label} (${grp.count})`
+    },
   },
 }
 </script>
@@ -36,7 +81,7 @@ export default {
   <div class="tab-bar">
     <b-tooltip
       :active="iconOnlyTabs && !$store.state.isMobile"
-      label="Dashboard"
+      :label="$t('Dashboard')"
       position="is-bottom"
       type="is-dark"
     >
@@ -46,34 +91,35 @@ export default {
         @click="activateDashboard"
       >
         <b-icon icon="overview-outline" pack="casa" size="is-small" />
-        <span v-show="!iconOnlyTabs" class="tab-label">Dashboard</span>
+        <span v-show="!iconOnlyTabs" class="tab-label">{{ $t('Dashboard') }}</span>
       </div>
     </b-tooltip>
 
     <b-tooltip
-      v-for="app in openApps"
-      :key="app.id"
+      v-for="grp in tabBarGroups"
+      :key="grp.groupKey"
       :active="iconOnlyTabs && !$store.state.isMobile"
-      :label="app.name"
+      :label="tooltipForGroup(grp)"
       position="is-bottom"
       type="is-dark"
     >
       <div
         class="tab-item"
-        :class="{ active: activeAppId === app.id, minimized: app.state === 'minimized', 'tab-icon-only': iconOnlyTabs }"
-        @click="activateApp(app.id)"
+        :class="{ active: grp.active, minimized: grp.minimized, 'tab-icon-only': iconOnlyTabs }"
+        @click="activateGroup(grp)"
       >
         <img
-          v-if="app.icon"
-          :src="app.icon"
-          :alt="app.name"
+          v-if="grp.icon"
+          :src="grp.icon"
+          :alt="grp.label"
           class="tab-icon"
         >
-        <span v-show="!iconOnlyTabs" class="tab-label">{{ app.name }}</span>
+        <span v-show="!iconOnlyTabs" class="tab-label">{{ grp.label }}</span>
+        <span v-if="grp.count > 1" class="tab-count">{{ grp.count }}</span>
         <button
           class="tab-close"
           :class="{ 'tab-close-compact': iconOnlyTabs }"
-          @click.stop="closeApp(app.id)"
+          @click.stop="closeGroup(grp)"
         >
           <b-icon icon="close" size="is-small" />
         </button>
@@ -88,11 +134,16 @@ export default {
   align-items: center;
   gap: 2px;
   flex: 1;
+  width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  margin: 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0 0.5rem;
   justify-content: center;
+  box-sizing: border-box;
 
   &::-webkit-scrollbar {
     height: 0;
@@ -111,7 +162,7 @@ export default {
   height: 2rem;
   font-size: 0.8125rem;
   transition: all 0.2s ease;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--shell-tab-text);
   position: relative;
   flex-shrink: 0;
 
@@ -121,12 +172,12 @@ export default {
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--shell-tab-hover-bg);
   }
 
   &.active {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
+    background: var(--shell-tab-active-bg);
+    color: var(--shell-tab-active-text);
 
     &::after {
       content: '';
@@ -163,6 +214,22 @@ export default {
   max-width: 6rem;
 }
 
+.tab-count {
+  flex-shrink: 0;
+  min-width: 1.125rem;
+  padding: 0 0.28rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 8px;
+  background: var(--shell-tab-count-bg);
+  color: var(--shell-tab-count-fg);
+}
+
+.tab-item.active .tab-count {
+  background: var(--shell-tab-count-bg-active);
+}
+
 .tab-close {
   display: flex;
   align-items: center;
@@ -184,7 +251,7 @@ export default {
 
   &:hover {
     opacity: 1 !important;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--shell-tab-close-hover);
   }
 }
 
