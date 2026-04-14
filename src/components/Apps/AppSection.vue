@@ -254,7 +254,7 @@ export default {
 				let orgOldAppList = [],
 					orgNewAppList = []
 				orgAppList.forEach(item => {
-					item.hostname = item.hostname || this.$baseIp
+					item.hostname = this.resolveAppWebHostname(item.hostname || '')
 					// Container app does not have icon.
 					item.icon = item.icon || require(`@/assets/img/app/default.svg`)
 					if (item.app_type === 'v1app' || item.app_type === 'container') {

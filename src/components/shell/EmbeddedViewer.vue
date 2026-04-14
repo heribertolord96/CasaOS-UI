@@ -179,7 +179,8 @@ export default {
     },
   },
   created() {
-    const initial = this.app.navUrl || this.app.url
+    const raw = this.app.navUrl || this.app.url
+    const initial = this.rewriteLocalhostToPageHost(raw)
     this.iframeEntrySrc = initial
     if (this.isCasaFilesEmbedded) {
       const p = this.filesPathFromShellUrl(initial)
@@ -216,11 +217,12 @@ export default {
       }
       const n = this.app.navUrl && String(this.app.navUrl).trim()
       const full = n || this.app.url || ''
+      const mapped = this.rewriteLocalhostToPageHost(full)
       if (this.isCasaFilesEmbedded) {
-        const p = this.filesPathFromShellUrl(full)
-        this.urlInputValue = p != null ? p : full
+        const p = this.filesPathFromShellUrl(mapped)
+        this.urlInputValue = p != null ? p : mapped
       } else {
-        this.urlInputValue = full
+        this.urlInputValue = mapped
       }
     },
     /**
@@ -267,6 +269,30 @@ export default {
         }
       }
       return null
+    },
+    /**
+     * If the shell is opened via a LAN hostname (e.g. dell.local) but the app URL
+     * still uses localhost, the iframe would load the *client* machine. Map loopback
+     * to the current page hostname so embedded Web UIs hit the CasaOS host.
+     */
+    rewriteLocalhostToPageHost(url) {
+      if (!url || typeof url !== 'string') {
+        return url
+      }
+      try {
+        const u = new URL(url, window.location.href)
+        const host = u.hostname.toLowerCase()
+        const page = (window.location.hostname || '').toLowerCase()
+        const loopback = host === 'localhost' || host === '127.0.0.1'
+        const pageIsLoopback = page === 'localhost' || page === '127.0.0.1'
+        if (loopback && !pageIsLoopback) {
+          u.hostname = window.location.hostname
+          return u.href
+        }
+      } catch {
+        return url
+      }
+      return url
     },
     startLoadTimeout() {
       clearTimeout(this.loadTimeout)
@@ -374,6 +400,7 @@ export default {
       if (!href) {
         return
       }
+      href = this.rewriteLocalhostToPageHost(href)
       this.loading = true
       this.loadError = false
       this.iframeEntrySrc = href
@@ -777,7 +804,8 @@ export default {
       this.loading = true
       this.loadError = false
       this.startLoadTimeout()
-      this.iframeEntrySrc = this.app.navUrl || this.app.url
+      const raw = this.app.navUrl || this.app.url
+      this.iframeEntrySrc = this.rewriteLocalhostToPageHost(raw)
       this.syncUrlInputFromApp()
       const iframe = this.$refs.iframe
       if (iframe) {

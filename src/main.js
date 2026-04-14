@@ -80,6 +80,8 @@ window.addEventListener('unhandledrejection', (event) => {
 Vue.prototype.$api = api;
 Vue.prototype.$openAPI = openAPI;
 Vue.prototype.$baseIp = baseIp;
+/** Same as browser address bar host; used for Web UI placeholders and default host. */
+Vue.prototype.$baseHostname = localhostName;
 Vue.prototype.$baseURL = baseURL;
 Vue.prototype.$protocol = protocol;
 Vue.prototype.$wsProtocol = wsProtocol;

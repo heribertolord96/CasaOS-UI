@@ -90,7 +90,7 @@ export default {
           .filter(item => item.app_type !== 'v1app' && item.app_type !== 'container')
           .map(item => ({
             ...item,
-            hostname: item.hostname || this.$baseIp,
+            hostname: this.resolveAppWebHostname(item.hostname || ''),
             icon: item.icon || require('@/assets/img/app/default.svg'),
           }))
         this.isLoading = false

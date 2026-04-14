@@ -2,6 +2,22 @@ import { nanoid } from 'nanoid'
 
 export default {
 	methods: {
+		/**
+		 * Default Web UI host: use browser hostname (how CasaOS was opened). Maps loopback
+		 * stored in app metadata to that host so embed and new tab match (e.g. dell.local:1880).
+		 */
+		resolveAppWebHostname(hostname) {
+			const page = typeof window !== 'undefined' ? String(window.location.hostname || '') : ''
+			const h = hostname != null ? String(hostname).trim() : ''
+			if (!h) {
+				return page || this.$baseIp
+			}
+			const lower = h.toLowerCase()
+			if (lower === 'localhost' || lower === '127.0.0.1') {
+				return page || this.$baseIp
+			}
+			return h
+		},
 		/** Full URL for same-origin hash routes (embedded iframe shell). */
 		embeddedShellAbsoluteUrl(routeLocation) {
 			const resolved = this.$router.resolve(routeLocation)
@@ -51,7 +67,7 @@ export default {
 		openThirdApp(appInfo, isNewWindows) {
 			this.$messageBus('apps_open', appInfo.name);
 			if (appInfo.hostname !== "" || appInfo.port !== "" || appInfo.index !== "") {
-				const hostIp = appInfo.hostname || this.$baseIp
+				const hostIp = this.resolveAppWebHostname(appInfo.hostname)
 				const scheme = appInfo.scheme || 'http'
 				const port = appInfo.port ? `:${appInfo.port}` : ''
 				const url = `${scheme}://${hostIp}${port}${appInfo.index}`
@@ -104,7 +120,7 @@ export default {
 					"id": appInfo.id,
 					"name": appInfo.id,
 					scheme: containerInfoV2.scheme,
-					hostname: containerInfoV2.hostname || this.$baseIp,
+					hostname: this.resolveAppWebHostname(containerInfoV2.hostname || ''),
 					port: containerInfoV2.port_map,
 					index: containerInfoV2.index,
 					image: allinfo.compose.services[appInfo.id].image,
