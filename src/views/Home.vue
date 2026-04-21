@@ -211,13 +211,77 @@ export default {
       this.$EventBus.$emit(events.SHOW_HOME_CONTEXT_MENU, e)
     },
 
+    /**
+     * @description: Validate wallpaper object saved in localStorage / returned by API
+     */
+    isValidWallpaperObject(w) {
+      if (!w || typeof w !== 'object' || !w.from) {
+        return false
+      }
+      switch (w.from) {
+        case 'SolidColor':
+          return typeof w.color === 'string' && w.color.length > 0
+        case 'Gradient':
+          return typeof w.gradient === 'string' && w.gradient.length > 0
+        case 'Built-in':
+        case 'Files':
+        case 'Upload':
+          return typeof w.path === 'string' && w.path.length > 0
+        default:
+          return false
+      }
+    },
+
+    /**
+     * @description: Normalize server payload (object or JSON string) for SET_WALLPAPER
+     */
+    normalizeWallpaperFromServer(data) {
+      if (data == null || data === '') {
+        return null
+      }
+      let parsed = data
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed)
+        } catch (e) {
+          return null
+        }
+      }
+      if (typeof parsed !== 'object' || !parsed.from) {
+        return null
+      }
+      const out = {
+        path: parsed.path || '',
+        from: parsed.from,
+      }
+      if (parsed.color) {
+        out.color = parsed.color
+      }
+      if (parsed.gradient) {
+        out.gradient = parsed.gradient
+      }
+      return this.isValidWallpaperObject(out) ? out : null
+    },
+
     getWallpaperConfig() {
+      try {
+        const localWallpaperRaw = localStorage.getItem('wallpaper_object')
+        if (localWallpaperRaw) {
+          const localWallpaper = JSON.parse(localWallpaperRaw)
+          if (localWallpaper && this.isValidWallpaperObject(localWallpaper)) {
+            this.$store.commit('SET_WALLPAPER', localWallpaper)
+            return
+          }
+        }
+      } catch (e) {
+        // ignore malformed local value and continue with server wallpaper
+      }
       this.$api.users.getCustomStorage(wallpaperConfig).then((res) => {
         if (res.data.success === 200 && res.data.data != '') {
-          this.$store.commit('SET_WALLPAPER', {
-            path: res.data.data.path,
-            from: res.data.data.from,
-          })
+          const serverWp = this.normalizeWallpaperFromServer(res.data.data)
+          if (serverWp) {
+            this.$store.commit('SET_WALLPAPER', serverWp)
+          }
         }
       })
     },

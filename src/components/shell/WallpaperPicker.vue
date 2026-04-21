@@ -2,7 +2,10 @@
 import usePreferences from '@/mixins/usePreferences'
 
 const CUSTOM_WALLPAPER_KEY = 'casaos_custom_wallpaper'
+const WALLPAPER_SERVER_KEY = 'wallpaper'
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024
+/** Skip syncing huge base64 payloads to custom storage (localStorage still holds wallpaper_object). */
+const MAX_WALLPAPER_SYNC_BYTES = 512 * 1024
 
 const gradientPresets = [
   { id: 'gradient-1', label: 'Ocean', value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
@@ -18,6 +21,9 @@ export default {
   data() {
     return {
       solidColor: '#1a1a2e',
+      gradientAngles: [0, 45, 90, 135, 180, 225, 270, 315],
+      customGradientAngle: 135,
+      customGradientStops: ['#667EEA', '#764BA2'],
       gradientPresets,
       builtInWallpapers: [
         { id: 'wp-01', path: require('@/assets/background/wallpaper01.jpg') },
@@ -33,23 +39,97 @@ export default {
     }
   },
   methods: {
+    /**
+     * Keep server custom storage in sync so a fresh profile / empty localStorage can restore the same wallpaper.
+     * Large base64 uploads may exceed API limits; local-only still works via getWallpaperConfig + wallpaper_object.
+     */
+    persistWallpaperToServer(wallpaper) {
+      if (!wallpaper || !wallpaper.from) {
+        return
+      }
+      const payload = {
+        path: wallpaper.path || '',
+        from: wallpaper.from,
+      }
+      if (wallpaper.color) {
+        payload.color = wallpaper.color
+      }
+      if (wallpaper.gradient) {
+        payload.gradient = wallpaper.gradient
+      }
+      try {
+        const n = JSON.stringify(payload).length
+        if (n > MAX_WALLPAPER_SYNC_BYTES) {
+          return
+        }
+      } catch (e) {
+        return
+      }
+      this.$api.users.setCustomStorage(WALLPAPER_SERVER_KEY, payload).catch(() => {})
+    },
+
+    normalizeHex(value) {
+      const input = String(value || '').trim().toUpperCase()
+      const withHash = input.startsWith('#') ? input : `#${input}`
+      return /^#([0-9A-F]{6})$/.test(withHash) ? withHash : null
+    },
     selectBuiltIn(wp) {
-      this.$store.commit('SET_WALLPAPER', { path: wp.path, from: 'Built-in' })
+      const w = { path: wp.path, from: 'Built-in' }
+      this.$store.commit('SET_WALLPAPER', w)
+      this.persistWallpaperToServer(w)
     },
     applySolidColor() {
-      this.$store.commit('SET_WALLPAPER', { path: '', from: 'SolidColor', color: this.solidColor })
-      const bg = document.getElementById('background')
-      if (bg) {
-        bg.style.backgroundImage = 'none'
-        bg.style.backgroundColor = this.solidColor
+      const normalized = this.normalizeHex(this.solidColor)
+      if (!normalized) {
+        return
       }
+      this.solidColor = normalized
+      const w = { path: '', from: 'SolidColor', color: normalized }
+      this.$store.commit('SET_WALLPAPER', w)
+      this.persistWallpaperToServer(w)
     },
     applyGradient(gradient) {
-      this.$store.commit('SET_WALLPAPER', { path: '', from: 'Gradient', gradient: gradient.value })
-      const bg = document.getElementById('background')
-      if (bg) {
-        bg.style.backgroundImage = gradient.value
+      const w = { path: '', from: 'Gradient', gradient: gradient.value }
+      this.$store.commit('SET_WALLPAPER', w)
+      this.persistWallpaperToServer(w)
+    },
+    updateCustomGradientStop(index, value) {
+      const normalized = this.normalizeHex(value)
+      if (!normalized) {
+        return
       }
+      this.$set(this.customGradientStops, index, normalized)
+    },
+    addGradientStop() {
+      this.customGradientStops.push('#FFFFFF')
+    },
+    removeGradientStop(index) {
+      if (this.customGradientStops.length <= 2) {
+        return
+      }
+      this.customGradientStops.splice(index, 1)
+    },
+    buildCustomGradient() {
+      const cleanStops = this.customGradientStops
+        .map(color => this.normalizeHex(color))
+        .filter(Boolean)
+      if (cleanStops.length < 2) {
+        return null
+      }
+      const step = 100 / (cleanStops.length - 1)
+      const gradientStops = cleanStops
+        .map((color, idx) => `${color} ${Math.round(step * idx)}%`)
+        .join(', ')
+      return `linear-gradient(${this.customGradientAngle}deg, ${gradientStops})`
+    },
+    applyCustomGradient() {
+      const gradient = this.buildCustomGradient()
+      if (!gradient) {
+        return
+      }
+      const w = { path: '', from: 'Gradient', gradient }
+      this.$store.commit('SET_WALLPAPER', w)
+      this.persistWallpaperToServer(w)
     },
     onFileSelect(event) {
       const file = event.target.files[0]
@@ -69,7 +149,9 @@ export default {
         try {
           localStorage.setItem(CUSTOM_WALLPAPER_KEY, base64)
           this.customImagePreview = base64
-          this.$store.commit('SET_WALLPAPER', { path: base64, from: 'Upload' })
+          const w = { path: base64, from: 'Upload' }
+          this.$store.commit('SET_WALLPAPER', w)
+          this.persistWallpaperToServer(w)
         } catch (err) {
           this.$buefy.toast.open({
             message: 'Failed to save image (storage full)',
@@ -81,7 +163,9 @@ export default {
     },
     applyCustomImage() {
       if (this.customImagePreview) {
-        this.$store.commit('SET_WALLPAPER', { path: this.customImagePreview, from: 'Upload' })
+        const w = { path: this.customImagePreview, from: 'Upload' }
+        this.$store.commit('SET_WALLPAPER', w)
+        this.persistWallpaperToServer(w)
       }
     },
     triggerFileInput() {
@@ -114,6 +198,45 @@ export default {
         @click="applyGradient(g)"
       />
     </div>
+    <h4 class="picker-section-title mt-2">{{ $t('Custom gradient') }}</h4>
+    <div class="is-flex is-align-items-center gap-2 mb-1">
+      <span class="is-size-7 picker-meta-label">{{ $t('Angle') }}</span>
+      <b-select v-model="customGradientAngle" size="is-small">
+        <option v-for="deg in gradientAngles" :key="deg" :value="deg">
+          {{ deg }}deg
+        </option>
+      </b-select>
+      <b-button size="is-small" type="is-dark" rounded @click="addGradientStop">
+        {{ $t('Add color') }}
+      </b-button>
+    </div>
+    <div class="picker-grid picker-grid--stops">
+      <div
+        v-for="(stop, idx) in customGradientStops"
+        :key="`stop-${idx}`"
+        class="gradient-stop-tile"
+      >
+        <input
+          :value="stop"
+          type="color"
+          class="color-input color-input--stop"
+          @input="updateCustomGradientStop(idx, $event.target.value)"
+        >
+        <button
+          v-if="customGradientStops.length > 2"
+          type="button"
+          class="gradient-stop-remove"
+          @click="removeGradientStop(idx)"
+        >
+          ×
+        </button>
+      </div>
+      <div
+        class="picker-thumb picker-thumb--preview"
+        :style="{ backgroundImage: buildCustomGradient() || 'none' }"
+        @click="applyCustomGradient"
+      />
+    </div>
 
     <h4 class="picker-section-title mt-3">{{ $t('Solid Color') }}</h4>
     <div class="is-flex is-align-items-center gap-2">
@@ -128,16 +251,20 @@ export default {
     </div>
 
     <h4 class="picker-section-title mt-3">{{ $t('Custom Image') }}</h4>
-    <div class="is-flex is-align-items-center gap-2">
+    <div class="picker-grid">
       <div
         v-if="customImagePreview"
         class="picker-thumb"
         :style="{ backgroundImage: `url(${customImagePreview})` }"
         @click="applyCustomImage"
       />
-      <b-button size="is-small" type="is-dark" rounded @click="triggerFileInput">
-        {{ $t('Upload') }}
-      </b-button>
+      <button
+        type="button"
+        class="picker-thumb picker-thumb-upload"
+        @click="triggerFileInput"
+      >
+        <span class="picker-upload-text">{{ $t('Upload') }}</span>
+      </button>
       <input
         ref="fileInput"
         type="file"
@@ -170,7 +297,7 @@ export default {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(74, 74, 74, 0.5);
+  color: var(--shell-muted-text, rgba(74, 74, 74, 0.5));
   margin-bottom: 0.5rem;
 }
 
@@ -178,6 +305,10 @@ export default {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.picker-grid--stops {
+  align-items: center;
 }
 
 .picker-thumb {
@@ -196,6 +327,50 @@ export default {
   }
 }
 
+.picker-thumb-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--shell-settings-btn-bg, rgba(255, 255, 255, 0.08));
+  border: 1px dashed var(--shell-select-border, rgba(255, 255, 255, 0.3));
+  color: var(--shell-dropdown-text, #fff);
+}
+
+.picker-thumb--preview {
+  border-style: solid;
+}
+
+.picker-upload-text {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.gradient-stop-tile {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+}
+
+.gradient-stop-remove {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.picker-meta-label {
+  color: var(--shell-muted-text);
+}
+
 .color-input {
   width: 2rem;
   height: 2rem;
@@ -204,6 +379,12 @@ export default {
   cursor: pointer;
   padding: 0;
   background: none;
+}
+
+.color-input--stop {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
 }
 
 .gap-2 {
