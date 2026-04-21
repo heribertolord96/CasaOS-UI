@@ -79,14 +79,26 @@ export default {
 
 				try {
 					const versionRes = await this.$api.sys.getVersion();
-					if (versionRes.data.success == 200) {
-						localStorage.setItem("version", versionRes.data.data.current_version);
+					if (versionRes.data.success == 200 && versionRes.data.data?.current_version != null) {
+						localStorage.setItem("version", String(versionRes.data.data.current_version));
 					}
 				} catch (e) {
 					// Main CasaOS API may be down (e.g. air build failed); gateway still serves /v1/users/* from user-service.
 					console.warn('[Login] getVersion skipped', e?.response?.status || e?.message || e)
 				}
-				this.$router.push("/");
+				// Ensure router guard does not treat the session as invalid when getVersion failed above.
+				if (!localStorage.getItem('version')) {
+					localStorage.setItem('version', 'unknown');
+				}
+				// replace avoids stacking /login on history; catch avoids silent failure when navigation is aborted (Vue Router 3).
+				const nav = this.$router.replace({ path: '/' });
+				if (nav && typeof nav.catch === 'function') {
+					nav.catch((err) => {
+						if (err && err.name !== 'NavigationDuplicated') {
+							console.warn('[Login] redirect after login', err);
+						}
+					});
+				}
 			} catch (err) {
 				const apiMessage = err.response?.data?.message
 				this.message = apiMessage

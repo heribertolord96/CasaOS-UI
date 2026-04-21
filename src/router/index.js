@@ -23,9 +23,14 @@ const router = new VueRouter({
 	routes
 })
 
+// Vue Router 3.1+ rejects push/replace when a guard redirects; catch so dev overlay stays clean.
 const originalPush = VueRouter.prototype.push
 VueRouter.prototype.push = function push(location) {
 	return originalPush.call(this, location).catch((err) => err)
+}
+const originalReplace = VueRouter.prototype.replace
+VueRouter.prototype.replace = function replace(location) {
+	return originalReplace.call(this, location).catch((err) => err)
 }
 
 const needInit = async () => {
@@ -71,6 +76,10 @@ router.beforeEach(async (to, from, next) => {
 					localStorage.removeItem("refresh_token");
 					localStorage.removeItem("wallpaper");
 					localStorage.removeItem("user");
+					if (store.state.windowManager.logoutClearWorkspace === true) {
+						store.dispatch('windowManager/clearWorkspaceForLogout')
+					}
+					store.commit('windowManager/SET_LOGOUT_CLEAR_WORKSPACE', null)
 					next('/login');
 				} else if (to.path === '/login') {
 					if (accessToken) {
@@ -79,8 +88,13 @@ router.beforeEach(async (to, from, next) => {
 						next();
 					}
 				} else if (version == null) {
-					localStorage.removeItem("access_token");
-					next('/login');
+					// Missing version key alone must not wipe a valid session (e.g. getVersion failed right after login).
+					if (accessToken) {
+						next();
+					} else {
+						localStorage.removeItem("access_token");
+						next('/login');
+					}
 				} else {
 					next();
 				}
